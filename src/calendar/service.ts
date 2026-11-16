@@ -11,6 +11,7 @@ import {
   InvalidEventError,
 } from "../core/errors.js";
 import { asErr, readStatus } from "../core/google-http.js";
+import { defaultSleep } from "../core/retry-loop.js";
 import type { ConnectionView } from "../core/types.js";
 import { withConnectionToken } from "../core/with-token.js";
 import { deriveEventId, fingerprint } from "./ids.js";
@@ -83,9 +84,6 @@ const PATCH_ATTEMPTS = 3;
 const MAX_EVENT_MS = 24 * 3_600_000;
 const BACKOFF_BASE_MS = 250;
 const BACKOFF_CAP_MS = 8000;
-
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 const conferenceStatus = (e: GEvent): string | undefined =>
   e.conferenceData?.createRequest?.status?.statusCode;

@@ -14,6 +14,10 @@ import {
   readRetryAfterMs,
   readStatus,
 } from "../core/google-http.js";
+import { RATE_REASONS, defaultSleep } from "../core/retry-loop.js";
+import type { RetryOptions } from "../core/retry-loop.js";
+
+export type { RetryOptions };
 
 export type SendErrorClass =
   | { kind: "retry"; delayMs: number | null }
@@ -34,7 +38,6 @@ const OUTCOME_UNKNOWN_CODES = new Set([
   "ETIMEDOUT",
   "ESOCKETTIMEDOUT",
 ]);
-const RATE_REASONS = new Set(["rateLimitExceeded", "userRateLimitExceeded"]);
 
 export function classifySendError(err: unknown): SendErrorClass {
   if (err instanceof GoogleLibError) return { kind: "fail", error: err };
@@ -100,17 +103,6 @@ export function classifySendError(err: unknown): SendErrorClass {
     error: new SendOutcomeUnknownError(undefined, opts),
   };
 }
-
-export type RetryOptions = {
-  maxAttempts?: number;
-  baseMs?: number;
-  capMs?: number;
-  sleep?: (ms: number) => Promise<void>;
-  random?: () => number;
-};
-
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Runs `fn`, retrying only errors that provably never reached Google's send

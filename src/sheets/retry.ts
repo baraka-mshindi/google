@@ -1,7 +1,6 @@
 import {
   GoogleApiError,
   GoogleLibError,
-  RateLimitedError,
   SheetTabNotFoundError,
   SheetsWriteOutcomeUnknownError,
   SpreadsheetAccessDeniedError,
@@ -18,7 +17,8 @@ import {
 } from "../core/google-http.js";
 import type { ErrLike } from "../core/google-http.js";
 import { redact } from "../core/redact.js";
-import type { RetryOptions } from "../gmail/retry.js";
+import { RATE_REASONS, runWithRetry } from "../core/retry-loop.js";
+import type { RetryOptions } from "../core/retry-loop.js";
 
 export type { RetryOptions };
 
@@ -41,7 +41,6 @@ export class SheetsUnauthorizedSignal extends Error {
 const PRE_SEND_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
 // Ambiguous transport failures: the request may have been applied.
 const AMBIGUOUS_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ESOCKETTIMEDOUT"]);
-const RATE_REASONS = new Set(["rateLimitExceeded", "userRateLimitExceeded"]);
 const PARSE_RANGE = /Unable to parse range:?\s*(.*)$/i;
 
 /** The tab named in Google's "Unable to parse range: <range>", else "". */
@@ -139,53 +138,29 @@ export function classifySheetsError(
   return classify(err, idempotent, {});
 }
 
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Runs `fn` under the Sheets retry policy (see `classifySheetsError`). 401 surfaces
  * as `SheetsUnauthorizedSignal`; everything else as sanitized `GoogleLibError`s that
  * carry `ids`.
  */
-export async function withSheetsRetry<T>(
+export function withSheetsRetry<T>(
   fn: () => Promise<T>,
   opts: RetryOptions & {
     idempotent: boolean;
     ids?: { tenantId?: string; connectionId?: string };
   },
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? 3;
-  const baseMs = opts.baseMs ?? 250;
-  const capMs = opts.capMs ?? 8000;
-  const sleep = opts.sleep ?? defaultSleep;
-  const random = opts.random ?? Math.random;
-  const ids: Ids = opts.ids ?? {};
-
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const c = classify(err, opts.idempotent, ids);
-      if (c.kind === "fail") throw c.error;
-      if (c.kind === "unauthorized") throw new SheetsUnauthorizedSignal();
-      const errOpts = { ...ids, cause: err };
-      if (c.delayMs !== null && c.delayMs > capMs) {
-        throw new RateLimitedError(c.delayMs, errOpts);
+  const { idempotent, ids = {}, ...retry } = opts;
+  return runWithRetry(fn, {
+    ...retry,
+    ids,
+    classify: (err) => {
+      const c = classify(err, idempotent, ids);
+      if (c.kind === "retry") return c;
+      if (c.kind === "unauthorized") {
+        return { kind: "throw", error: new SheetsUnauthorizedSignal() };
       }
-      if (attempt + 1 >= maxAttempts) {
-        const e = asErr(err);
-        const status = readStatus(e);
-        if (status === 429 || status === 403) {
-          throw new RateLimitedError(c.delayMs, errOpts);
-        }
-        if (status !== null) {
-          throw new GoogleApiError(status, readReason(e), errOpts);
-        }
-        throw new GoogleApiError(0, readNetCode(e), errOpts);
-      }
-      await sleep(
-        c.delayMs ?? random() * Math.min(capMs, baseMs * 2 ** attempt),
-      );
-    }
-  }
+      return { kind: "throw", error: c.error };
+    },
+  });
 }
