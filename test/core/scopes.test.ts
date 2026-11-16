@@ -13,7 +13,17 @@ const CAL = [
   "https://www.googleapis.com/auth/calendar.events.freebusy",
 ];
 
+const SHEETS = "https://www.googleapis.com/auth/spreadsheets";
+
 describe("scopes", () => {
+  it("scopesFor(sheets) adds the spreadsheets scope", () =>
+    expect(scopesFor(["sheets"])).toEqual(["openid", "email", SHEETS]));
+
+  it("assertServiceScopes requires the spreadsheets scope for sheets", () =>
+    expect(() => assertServiceScopes([SEND], ["sheets"])).toThrow(
+      expect.objectContaining({ code: "missing_scope", required: [SHEETS] }),
+    ));
+
   it("scopesFor(calendar) adds the two calendar scopes", () =>
     expect(scopesFor(["calendar"])).toEqual(["openid", "email", ...CAL]));
 

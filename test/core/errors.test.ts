@@ -23,6 +23,11 @@ import {
   OAuthConsentDeniedError,
   RateLimitedError,
   SendOutcomeUnknownError,
+  SheetTabNotFoundError,
+  SheetsWriteOutcomeUnknownError,
+  SpreadsheetAccessDeniedError,
+  SpreadsheetNotFoundError,
+  InvalidSheetsInputError,
   UnexpectedAccountError,
 } from "../../src/core/index.js";
 import { safeCause } from "../../src/core/redact.js";
@@ -129,5 +134,54 @@ describe("errors", () => {
     expect(e.message.length).toBeLessThanOrEqual(
       "Invalid event field: ".length + 64,
     );
+  });
+});
+
+describe("sheets errors", () => {
+  it.each([
+    [
+      () => new SpreadsheetNotFoundError(),
+      "SpreadsheetNotFoundError",
+      "spreadsheet_not_found",
+    ],
+    [
+      () => new SpreadsheetAccessDeniedError(),
+      "SpreadsheetAccessDeniedError",
+      "spreadsheet_access_denied",
+    ],
+    [
+      () => new SheetTabNotFoundError("Log"),
+      "SheetTabNotFoundError",
+      "sheet_tab_not_found",
+    ],
+    [
+      () => new InvalidSheetsInputError("range"),
+      "InvalidSheetsInputError",
+      "invalid_sheets_input",
+    ],
+    [
+      () => new SheetsWriteOutcomeUnknownError(),
+      "SheetsWriteOutcomeUnknownError",
+      "sheets_write_outcome_unknown",
+    ],
+  ] as const)("%#: has its name and code", (make, name, code) => {
+    const e = make();
+    expect(e).toBeInstanceOf(GoogleLibError);
+    expect(e.name).toBe(name);
+    expect(e.code).toBe(code);
+    expect(e.message.length).toBeGreaterThan(0);
+  });
+
+  it("carries the tab and field", () => {
+    expect(new SheetTabNotFoundError("Log").tab).toBe("Log");
+    expect(new InvalidSheetsInputError("range").field).toBe("range");
+  });
+
+  it("carries tenant and connection ids", () => {
+    const e = new SheetsWriteOutcomeUnknownError(undefined, {
+      tenantId: "t1",
+      connectionId: "c1",
+    });
+    expect([e.tenantId, e.connectionId]).toEqual(["t1", "c1"]);
   });
 });
