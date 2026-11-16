@@ -39,17 +39,18 @@ further services on the same foundation.
 
 Every module must hold these. Breaking one is a bug, not a trade-off.
 
-| #   | Invariant                                                                                                                                                                                                                        |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I1  | Client secrets, refresh tokens, and PKCE verifiers are never stored, logged, thrown, emitted, or returned in plaintext.                                                                                                          |
-| I2  | Every read of tenant-owned data takes `tenantId` and fails closed on mismatch. The only exception is the operator tools `rewrapAll` / `verifyAll` (§5.4), which never return plaintext and run under a separate privileged role. |
-| I3  | Ciphertext is cryptographically bound to its tenant, record, and field (AAD). Moving a ciphertext to another row makes it undecryptable.                                                                                         |
-| I4  | The OAuth callback derives tenant, actor, and intent **only** from server-stored state.                                                                                                                                          |
-| I5  | The redirect URI is fixed at construction time; never taken from request input.                                                                                                                                                  |
-| I6  | Access tokens live in process memory only.                                                                                                                                                                                       |
-| I7  | A send is attempted at most once unless the failure provably happened before Google received it, or Google answered `429`.                                                                                                       |
-| I8  | One `(tenantId, organizerEmail, idempotencyKey)` yields at most one calendar event, and its invitations are sent once.                                                                                                           |
-| I9  | Only calendar events stamped `mshindiGoogle: "v1"` with the same `mshindiTenant` are read or changed.                                                                                                                            |
+| #   | Invariant                                                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| I1  | Client secrets, refresh tokens, and PKCE verifiers are never stored, logged, thrown, emitted, or returned in plaintext.                                                                                                              |
+| I2  | Every read of tenant-owned data takes `tenantId` and fails closed on mismatch. The only exception is the operator tools `rewrapAll` / `verifyAll` (§5.4), which never return plaintext and run under a separate privileged role.     |
+| I3  | Ciphertext is cryptographically bound to its tenant, record, and field (AAD). Moving a ciphertext to another row makes it undecryptable.                                                                                             |
+| I4  | The OAuth callback derives tenant, actor, and intent **only** from server-stored state.                                                                                                                                              |
+| I5  | The redirect URI is fixed at construction time; never taken from request input.                                                                                                                                                      |
+| I6  | Access tokens live in process memory only.                                                                                                                                                                                           |
+| I7  | A send is attempted at most once unless the failure provably happened before Google received it, or Google answered `429`.                                                                                                           |
+| I8  | One `(tenantId, organizerEmail, idempotencyKey)` yields at most one calendar event, and its invitations are sent once.                                                                                                               |
+| I9  | Only calendar events stamped `mshindiGoogle: "v1"` with the same `mshindiTenant` are read or changed.                                                                                                                                |
+| I10 | `append` and `batch` are retried only on 429 / rate-limit 403 or pre-send network codes `ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`; any other ambiguous failure throws `SheetsWriteOutcomeUnknownError` after exactly one Google call. |
 
 ---
 
@@ -65,7 +66,7 @@ semantic-release, commitlint, prettier).
 ├── /postgres   createPostgresStore(query), migrations
 ├── /testing    InMemoryStore, LocalKeyProvider, CaptureTransport
 ├── /calendar   createCalendar(google) → availability, suggestSlots, create/update/cancel/getEvent
-└── /sheets     (later — gsheets migrates here)
+└── /sheets     createSheets(google) → open() → values, rows, append, batch
 ```
 
 **Dependencies**
@@ -77,13 +78,14 @@ semantic-release, commitlint, prettier).
 | `nodemailer` (MailComposer only)            | optional peer | `/gmail`                                    |
 | `html-to-text`                              | optional peer | `/gmail` (plain-text fallback)              |
 | `@googleapis/calendar` (`>=14.0.0 <21.0.0`) | optional peer | `/calendar`                                 |
-| `@googleapis/sheets`                        | optional peer | later                                       |
+| `@googleapis/sheets` (`>=12.0.0 <19.0.0`)   | optional peer | `/sheets`                                   |
 
 Importing `/gmail` without its peers throws a clear install-instructions error.
 
-**Migration of `@mshindi-labs/gsheets`:** after `/sheets` lands, publish a final
-`gsheets` release that re-exports from `@mshindi-labs/google/sheets` and is marked
-`npm deprecate`.
+**Retirement of `@mshindi-labs/gsheets`:** `/sheets` replaces it with a redesigned,
+tenant-aware API and no compatibility shim. After `/sheets` ships, `gsheets` is marked
+`npm deprecate` ("Moved to @mshindi-labs/google/sheets") and its repo is archived. No
+forwarding release. See `docs/superpowers/specs/2026-11-16-sheets-design.md` §10.
 
 ---
 
@@ -782,7 +784,10 @@ redacted before attaching.
    Google Meet, reschedule, cancel, RSVP status). Done; see
    `docs/guides/calendar-scheduling.md` and
    `docs/superpowers/specs/2026-11-05-calendar-design.md`.
-8. **Later**: `/sheets` migration from `gsheets`, more DB adapters.
+8. **Sheets**: `/sheets` (tenant-aware values, rows, safe append, atomic batch,
+   `FakeSheets`), replacing `gsheets`. Done; see `docs/guides/sheets.md` and
+   `docs/superpowers/specs/2026-11-16-sheets-design.md`.
+9. **Later**: more DB adapters.
 
 ---
 

@@ -6,6 +6,7 @@ interviews on Google Calendar.
 
 ```sh
 npm i @mshindi-labs/google @googleapis/gmail nodemailer html-to-text
+npm i @mshindi-labs/google @googleapis/sheets@^14   # Sheets, on Node 18 / 20
 ```
 
 ## Quick start
@@ -54,8 +55,8 @@ await gmail.send({
 });
 ```
 
-Entry points: `/core`, `/gmail`, `/calendar`, `/postgres`, `/testing` (there is no root import).
-Optional peers (`@googleapis/gmail`, `@googleapis/calendar`, `nodemailer`, `html-to-text`, KMS clients) are
+Entry points: `/core`, `/gmail`, `/calendar`, `/sheets`, `/postgres`, `/testing` (there is no root import).
+Optional peers (`@googleapis/gmail`, `@googleapis/calendar`, `@googleapis/sheets`, `nodemailer`, `html-to-text`, KMS clients) are
 loaded on first use; a missing one throws `MissingPeerDependencyError` with the
 `npm i` command to run.
 
@@ -69,6 +70,7 @@ own error classes and `instanceof` can be false for a genuine library error.
 - [Tenant setup](docs/guides/tenant-setup.md): for a tenant admin creating the Google OAuth client.
 - [Host integration](docs/guides/host-integration.md): wiring, routes, error messages, key providers.
 - [Calendar scheduling](docs/guides/calendar-scheduling.md): idempotent interview booking, reschedule, cancel, free/busy.
+- [Google Sheets](docs/guides/sheets.md): read rows as objects, append without duplicates, atomic batch formatting.
 - [Bulk sending](docs/guides/bulk-sending.md): a queue pattern that never double-sends.
 - [Prisma and TypeORM](docs/guides/orm-integration.md): plugging an ORM into the Postgres store.
 - [Postgres row-level security](docs/guides/postgres-rls.md): optional database-enforced tenant isolation.
