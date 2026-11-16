@@ -10,7 +10,8 @@ function isFormula(cell: unknown): cell is { formula: string } {
     !Array.isArray(cell) &&
     Object.keys(cell).length === 1 &&
     typeof (cell as { formula?: unknown }).formula === "string" &&
-    (cell as { formula: string }).formula.startsWith("=")
+    (cell as { formula: string }).formula.startsWith("=") &&
+    (cell as { formula: string }).formula.slice(1).trim() !== ""
   );
 }
 
@@ -28,6 +29,12 @@ export function encodeRows(
   valueInputOption: "RAW" | "USER_ENTERED";
   values: Encoded[][];
 } {
+  if (mode !== "raw" && mode !== "user_entered") {
+    throw new InvalidSheetsInputError(
+      "input",
+      'Invalid input mode: expected "raw" or "user_entered"',
+    );
+  }
   const invalid = (detail: string) =>
     new InvalidSheetsInputError(field, `Invalid ${field}: ${detail}`);
   if (!Array.isArray(rows) || rows.length === 0) {

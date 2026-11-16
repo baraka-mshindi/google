@@ -77,4 +77,13 @@ describe("encodeRows validation", () => {
   it("uses a custom field name", () => {
     expect(bad([], "rows")).toBe("rows");
   });
+  it("rejects empty formulas", () => {
+    expect(bad([[{ formula: "=" }]])).toBe("values");
+    expect(bad([[{ formula: "=   " }]])).toBe("values");
+  });
+  it("fails closed on an unknown input mode", () => {
+    const rows: CellInput[][] = [["=1+1", { formula: "=A1" }]];
+    expect(fieldOf(() => encodeRows(rows, "RAW" as never))).toBe("input");
+    expect(fieldOf(() => encodeRows(rows, undefined as never))).toBe("input");
+  });
 });
