@@ -246,10 +246,7 @@ const { range, firstRow, lastRow } = await sheet.append("Applicants", [
 where they landed. With `{ insert: "insert_rows" }` (the default) it inserts new rows;
 `"overwrite"` writes into the empty rows below the table.
 
-An append is **not idempotent**: sending it twice adds the rows twice. So `append` and
-`batch` are retried only on 429 / rate-limit 403 or pre-send network codes `ENOTFOUND`,
-`EAI_AGAIN`, `ECONNREFUSED`; any other ambiguous failure throws
-`SheetsWriteOutcomeUnknownError` after exactly one Google call. The library never
+An append is **not idempotent**: sending it twice adds the rows twice. So `append` and `batch` are retried only when Google answered 429 / rate-limit 403, or the failure provably happened before the request reached Google (`ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `ERR_TLS_*`, `CERT_*`); any other ambiguous failure throws `SheetsWriteOutcomeUnknownError` after exactly one Google call. The library never
 guesses whether the rows landed. You decide, after looking:
 
 ```ts
