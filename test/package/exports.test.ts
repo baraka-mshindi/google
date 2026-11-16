@@ -18,6 +18,7 @@ const TEST_ONLY = [
   "FakeGoogleOAuth",
   "CaptureTransport",
   "FakeCalendar",
+  "FakeSheets",
   "runStoreContractTests",
 ];
 
@@ -44,6 +45,7 @@ describe("package exports", () => {
         "InvalidGrantError",
         "InvalidMessageError",
         "InvalidOAuthStateError",
+        "InvalidSheetsInputError",
         "KeyProviderUnavailableError",
         "MessageTooLargeError",
         "MissingPeerDependencyError",
@@ -54,6 +56,10 @@ describe("package exports", () => {
         "RateLimitedError",
         "SERVICE_SCOPES",
         "SendOutcomeUnknownError",
+        "SheetTabNotFoundError",
+        "SheetsWriteOutcomeUnknownError",
+        "SpreadsheetAccessDeniedError",
+        "SpreadsheetNotFoundError",
         "StaticKeyProvider",
         "UnexpectedAccountError",
         "createGoogle",
@@ -101,6 +107,22 @@ describe("package exports", () => {
     expect(mod).not.toHaveProperty("FakeCalendar");
   });
 
+  it("/sheets", async () => {
+    const mod = await load("sheets");
+    expect(names(mod)).toMatchInlineSnapshot(`
+      [
+        "a1",
+        "createSheets",
+        "createSheetsApiTransport",
+        "req",
+      ]
+    `);
+    expect(mod).not.toHaveProperty("InvalidGrantError");
+    expect(mod).not.toHaveProperty("FakeSheets");
+    expect(mod).not.toHaveProperty("SheetsUnauthorizedSignal");
+    expect(mod).not.toHaveProperty("withSheetsRetry");
+  });
+
   it("/postgres", async () => {
     expect(names(await load("postgres"))).toMatchInlineSnapshot(`
       [
@@ -118,15 +140,17 @@ describe("package exports", () => {
         "CaptureTransport",
         "FakeCalendar",
         "FakeGoogleOAuth",
+        "FakeSheets",
         "InMemoryStore",
         "LocalKeyProvider",
         "runStoreContractTests",
+        "sheetsHttpError",
       ]
     `);
   });
 
   it("test-only helpers ship only in /testing", async () => {
-    for (const entry of ["core", "gmail", "calendar", "postgres"]) {
+    for (const entry of ["core", "gmail", "calendar", "sheets", "postgres"]) {
       const exported = names(await load(entry));
       for (const name of TEST_ONLY) expect(exported).not.toContain(name);
     }
@@ -135,7 +159,14 @@ describe("package exports", () => {
   });
 
   it("every entry loads through require() with matching names", async () => {
-    for (const entry of ["core", "gmail", "calendar", "postgres", "testing"]) {
+    for (const entry of [
+      "core",
+      "gmail",
+      "calendar",
+      "sheets",
+      "postgres",
+      "testing",
+    ]) {
       const cjs = require(resolve(dist, `${entry}.cjs`)) as Record<
         string,
         unknown
@@ -195,9 +226,17 @@ describe("package exports", () => {
       "./core",
       "./gmail",
       "./postgres",
+      "./sheets",
       "./testing",
     ]);
-    for (const entry of ["core", "gmail", "calendar", "postgres", "testing"]) {
+    for (const entry of [
+      "core",
+      "gmail",
+      "calendar",
+      "sheets",
+      "postgres",
+      "testing",
+    ]) {
       expect(pkg.exports[`./${entry}`]).toEqual({
         import: {
           types: `./dist/${entry}.d.ts`,
