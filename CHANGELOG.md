@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/baraka-mshindi/google/compare/google-v1.2.0...google-v1.2.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **package:** point repository metadata at baraka-mshindi/google ([46fdfc3](https://github.com/baraka-mshindi/google/commit/46fdfc3e685f9ed76578bbd1442825177120ce61))
+* **package:** point repository metadata at baraka-mshindi/google ([4988511](https://github.com/baraka-mshindi/google/commit/498851160e504c4439f7f4b18015bc212f32f18d))
+
 ## [1.2.0](https://github.com/baraka-mshindi/google/compare/google-v1.1.0...google-v1.2.0) (2026-11-16)
 
 
