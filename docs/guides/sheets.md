@@ -97,8 +97,8 @@ a1.quoteTab("Bob's tab"); // 'Bob''s tab'
 a1.range("Q1 2026", "A1:C10"); // 'Q1 2026'!A1:C10
 a1.columnToIndex("AA"); // 27
 a1.indexToColumn(27); // "AA"
-a1.split("'Q1 2026'!A1:C10"); // the tab and the range part
-a1.parse("B2:D"); // 1-based bounds, open on the missing side
+a1.split("'Q1 2026'!A1:C10"); // { tab: "Q1 2026", range: "A1:C10" }
+a1.parse("B2:D"); // { startRow: 2, endRow: null, startColumn: 2, endColumn: 4 }
 ```
 
 ### What is in the spreadsheet
@@ -161,6 +161,8 @@ Each result has `rowNumber` (the 1-based sheet row, handy for a later `update`) 
 - Duplicate headers are suffixed `_2`, `_3`.
 - Fully empty rows are skipped.
 - Cells to the right of the last header keep their data under `column_<letter>`.
+- Every row object has the same keys: the header keys plus a `column_<letter>` for
+  each column any row has beyond the header.
 
 Pass `columns` such as `"B:F"` to read only part of the tab, and `headerRow` when the
 headers are not on row 1.
