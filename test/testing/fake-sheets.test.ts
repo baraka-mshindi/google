@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SheetTabNotFoundError,
   SpreadsheetNotFoundError,
@@ -8,6 +8,7 @@ import { INFO_FIELDS, TAB_FIELDS } from "../../src/sheets/transport.js";
 import { FakeSheets, sheetsHttpError } from "../../src/testing/index.js";
 
 const T = { accessToken: "tok", spreadsheetId: "fake-spreadsheet" };
+const a1q = (tab: string) => `'${tab.replace(/'/g, "''")}'`;
 
 const status = async (p: Promise<unknown>) =>
   p.then(
@@ -202,7 +203,7 @@ describe("FakeSheets", () => {
         ["c", "d", "e"],
       ]);
       expect(out).toMatchObject({
-        updatedRange: "'Log'!B2:D3",
+        updatedRange: "Log!B2:D3",
         updatedCells: 5,
       });
     });
@@ -310,7 +311,7 @@ describe("FakeSheets", () => {
         valueRenderOption: "UNFORMATTED_VALUE",
       });
       expect(got.values).toEqual([["a", "", "c"], [], ["", "x"]]);
-      expect(got.range).toBe("'T'!A1:Z1000");
+      expect(got.range).toBe("T!A1:Z1000");
       const sub = await f.valuesGet({
         ...T,
         range: "'T'!B2:C3",
@@ -323,7 +324,7 @@ describe("FakeSheets", () => {
         valueRenderOption: "UNFORMATTED_VALUE",
       });
       expect(empty.values).toBeUndefined();
-      expect(empty.range).toBe("'T'!F1:G2");
+      expect(empty.range).toBe("T!F1:G2");
     });
 
     it("FORMATTED_VALUE returns strings", async () => {
@@ -458,8 +459,8 @@ describe("FakeSheets", () => {
       });
       const r1 = await append(f, "'Log'!A1", [["a", "b", "c"]]);
       const r2 = await append(f, "'Log'", [["d", "e"]]);
-      expect(r1.updates?.updatedRange).toBe("'Log'!A2:C2");
-      expect(r2.updates?.updatedRange).toBe("'Log'!A3:B3");
+      expect(r1.updates?.updatedRange).toBe("Log!A2:C2");
+      expect(r2.updates?.updatedRange).toBe("Log!A3:B3");
       expect(f.values("Log")).toEqual([
         ["h1", "h2", "h3"],
         ["a", "b", "c"],
@@ -475,14 +476,14 @@ describe("FakeSheets", () => {
         [1, 2, 3],
         [4, 5, 6],
       ]);
-      expect(r.updates?.updatedRange).toBe("'Log'!A5:C6");
+      expect(r.updates?.updatedRange).toBe("Log!A5:C6");
     });
 
     it("a formula cell counts as non-empty", async () => {
       const f = new FakeSheets({ tabs: [{ title: "Log" }] });
       await write(f, "'Log'!A2", [["=1+1"]], "USER_ENTERED");
       const r = await append(f, "'Log'", [["next"]]);
-      expect(r.updates?.updatedRange).toBe("'Log'!A3");
+      expect(r.updates?.updatedRange).toBe("Log!A3");
       expect(f.formulaAt("Log", "A2")).toBe("=1+1");
     });
 
@@ -502,7 +503,7 @@ describe("FakeSheets", () => {
     it("an empty tab appends at row 1", async () => {
       const f = new FakeSheets();
       const r = await append(f, "'Sheet1'!A1", [["x"]]);
-      expect(r.updates?.updatedRange).toBe("'Sheet1'!A1");
+      expect(r.updates?.updatedRange).toBe("Sheet1!A1");
     });
   });
 
@@ -1068,7 +1069,7 @@ describe("FakeSheets", () => {
         () => undefined,
       );
       expect(f.calls).toEqual([
-        { op: "getSpreadsheet" },
+        { op: "getSpreadsheet", fields: TAB_FIELDS },
         {
           op: "valuesUpdate",
           ranges: ["'T'!A1"],
@@ -1128,6 +1129,189 @@ describe("FakeSheets", () => {
       await expect(
         f.getSpreadsheet({ ...T, fields: TAB_FIELDS }),
       ).resolves.toBeDefined();
+    });
+  });
+  describe("fidelity fixes", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("a broad field mask leaks grid data; INFO_FIELDS does not", async () => {
+      const f = new FakeSheets({
+        tabs: [{ title: "T", rows: [["x", 3, true]] }],
+      });
+      await write(f, "'T'!A2", [["=A1"]], "USER_ENTERED");
+      for (const fields of ["*", "sheets", "sheets.data"]) {
+        const got = await f.getSpreadsheet({ ...T, fields });
+        expect(got.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values).toEqual([
+          {
+            userEnteredValue: { stringValue: "x" },
+            effectiveValue: { stringValue: "x" },
+            formattedValue: "x",
+          },
+          {
+            userEnteredValue: { numberValue: 3 },
+            effectiveValue: { numberValue: 3 },
+            formattedValue: "3",
+          },
+          {
+            userEnteredValue: { boolValue: true },
+            effectiveValue: { boolValue: true },
+            formattedValue: "TRUE",
+          },
+        ]);
+        expect(
+          got.sheets?.[0]?.data?.[0]?.rowData?.[1]?.values?.[0]
+            ?.userEnteredValue,
+        ).toEqual({ formulaValue: "=A1" });
+      }
+      const info = await f.getSpreadsheet({ ...T, fields: INFO_FIELDS });
+      expect(info.sheets?.[0]).not.toHaveProperty("data");
+      expect(JSON.stringify(info)).not.toContain("stringValue");
+    });
+
+    it("records the field mask of getSpreadsheet calls", async () => {
+      const f = new FakeSheets();
+      await f.getSpreadsheet({ ...T, fields: INFO_FIELDS });
+      expect(f.calls).toEqual([{ op: "getSpreadsheet", fields: INFO_FIELDS }]);
+    });
+
+    it("a bare A1 range (no tab) addresses the first visible tab", async () => {
+      const f = new FakeSheets({
+        tabs: [
+          { title: "Sheet1", sheetId: 0, rows: [["s"]] },
+          { title: "2026", sheetId: 1, rows: [["y"]] },
+        ],
+      });
+      expect(await read(f, "A1")).toEqual([["s"]]);
+      expect(await read(f, "'2026'")).toEqual([["y"]]);
+      // Google reads row 2026 of the first sheet, which is past its grid.
+      expect(await message(read(f, "2026"))).toContain("exceeds grid limits");
+      await batch(f, [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: 0, hidden: true },
+            fields: "hidden",
+          },
+        },
+      ]);
+      expect(await read(f, "A1")).toEqual([["y"]]);
+    });
+
+    it("an unquoted tab title containing ' is rejected; spaces are fine", async () => {
+      const f = new FakeSheets({
+        tabs: [
+          { title: "it's", rows: [["q"]] },
+          { title: "My Tab", rows: [["m"]] },
+        ],
+      });
+      expect(await message(read(f, "it's!A1"))).toBe(
+        "Unable to parse range: it's!A1",
+      );
+      expect(await read(f, "'it''s'!A1")).toEqual([["q"]]);
+      expect(await read(f, "My Tab!A1")).toEqual([["m"]]);
+      expect(await read(f, "My Tab")).toEqual([["m"]]);
+    });
+
+    it("update*/repeatCell requests without fields → 400", async () => {
+      const f = new FakeSheets();
+      const one = (r: object) => status(batch(f, [r]));
+      expect(
+        await one({ repeatCell: { range: { sheetId: 0 }, cell: {} } }),
+      ).toBe(400);
+      expect(
+        await one({
+          updateDimensionProperties: {
+            range: { sheetId: 0, dimension: "COLUMNS" },
+            properties: { pixelSize: 9 },
+          },
+        }),
+      ).toBe(400);
+      expect(
+        await one({ updateCells: { range: { sheetId: 0 }, rows: [] } }),
+      ).toBe(400);
+      expect(
+        await one({
+          updateCells: { range: { sheetId: 0 }, rows: [], fields: "*" },
+        }),
+      ).toBe(0);
+    });
+
+    it("recorded-only requests missing their range → 400", async () => {
+      const f = new FakeSheets();
+      const one = (r: object) => status(batch(f, [r]));
+      expect(await one({ mergeCells: { mergeType: "MERGE_ALL" } })).toBe(400);
+      expect(await one({ copyPaste: { source: { sheetId: 0 } } })).toBe(400);
+      expect(await one({ sortRange: { sortSpecs: [] } })).toBe(400);
+      expect(
+        await one({
+          autoResizeDimensions: { dimensions: { dimension: "COLUMNS" } },
+        }),
+      ).toBe(0);
+    });
+
+    it("a range with no sheetId means sheet 0", async () => {
+      const f = new FakeSheets({ tabs: [{ title: "A", sheetId: 5 }] });
+      expect(
+        await status(
+          batch(f, [{ mergeCells: { range: { startRowIndex: 0 } } }]),
+        ),
+      ).toBe(400);
+      expect(await status(batch(f, [{ clearBasicFilter: {} }]))).toBe(400);
+      expect(
+        await status(batch(f, [{ mergeCells: { range: { sheetId: 5 } } }])),
+      ).toBe(0);
+    });
+
+    it("reads past the grid → 400 exceeds grid limits", async () => {
+      const f = new FakeSheets({ tabs: [{ title: "T" }] });
+      expect(await message(read(f, "'T'!A1:A1001"))).toBe(
+        "Range ('T'!A1:A1001) exceeds grid limits. Max rows: 1000, max columns: 26",
+      );
+      expect(await status(read(f, "'T'!AA1"))).toBe(400);
+      expect(await status(read(f, "'T'!A:A"))).toBe(0);
+      expect(await status(read(f, "'T'!Z1000"))).toBe(0);
+      await write(f, "'T'!A1001", [["grown"]]);
+      expect(await read(f, "'T'!A1001")).toEqual([["grown"]]);
+    });
+
+    it("returned refs quote the tab only when Google would", async () => {
+      const f = new FakeSheets({
+        tabs: [
+          { title: "Log" },
+          { title: "Class Data" },
+          { title: "A1" },
+          { title: "2026" },
+          { title: "R1C1" },
+        ],
+      });
+      const ref = async (tab: string) =>
+        (await write(f, `${a1q(tab)}!B2`, [["v"]])).updatedRange;
+      expect(await ref("Log")).toBe("Log!B2");
+      expect(await ref("Class Data")).toBe("'Class Data'!B2");
+      expect(await ref("A1")).toBe("'A1'!B2");
+      expect(await ref("2026")).toBe("'2026'!B2");
+      expect(await ref("R1C1")).toBe("'R1C1'!B2");
+    });
+
+    it("year-less M/D dates use a fixed year, not the wall clock", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2031-06-01T00:00:00Z"));
+      const f = new FakeSheets();
+      await write(f, "'Sheet1'!A1", [["1/2"]], "USER_ENTERED");
+      expect(await read(f, "'Sheet1'!A1", "FORMATTED_VALUE")).toEqual([
+        ["1/2/2026"],
+      ]);
+      expect(await read(f, "'Sheet1'!A1")).toEqual([
+        [Date.UTC(2026, 0, 2) / 86_400_000 + 25_569],
+      ]);
+    });
+
+    it("a parsed percent keeps its text when formatted", async () => {
+      const f = new FakeSheets();
+      await write(f, "'Sheet1'!A1", [["5%"]], "USER_ENTERED");
+      expect(await read(f, "'Sheet1'!A1", "FORMATTED_VALUE")).toEqual([["5%"]]);
+      expect(await read(f, "'Sheet1'!A1")).toEqual([[0.05]]);
     });
   });
 });

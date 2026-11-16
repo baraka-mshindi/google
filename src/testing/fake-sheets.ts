@@ -23,6 +23,8 @@ export type FakeSheetsCall = {
   ranges?: string[];
   valueInputOption?: string;
   requests?: number;
+  /** The field mask of a `getSpreadsheet` call. */
+  fields?: string;
 };
 
 /** A stored cell. `f` marks a formula; `fmt` overrides the formatted text. */
@@ -82,6 +84,42 @@ const NUMBER = /^[+-]?\d+(\.\d+)?$/;
 const PERCENT = /^[+-]?\d+(\.\d+)?%$/;
 const BOOLEAN = /^(true|false)$/i;
 const DATE = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/;
+/**
+ * The year given to a year-less `M/D` under USER_ENTERED. Google uses the current
+ * year; the fake pins it so results never depend on the wall clock.
+ */
+const FIXED_YEAR = 2026;
+
+// Recorded-only requests whose `fields` mask Google requires (per v4.d.ts).
+const NEEDS_FIELDS = new Set(
+  (
+    "appendCells repeatCell updateBanding updateCells updateDataSource " +
+    "updateDeveloperMetadata updateDimensionGroup updateDimensionProperties " +
+    "updateEmbeddedObjectBorder updateFilterView updateNamedRange " +
+    "updateProtectedRange updateSlicerSpec updateSpreadsheetProperties updateTable"
+  ).split(" "),
+);
+// Recorded-only requests' required ranges: each entry lists alternative paths.
+// A range found there must be on an existing sheet (no `sheetId` means 0).
+const NEEDS_RANGE: Record<string, string[][]> = {
+  repeatCell: [["range"]],
+  mergeCells: [["range"]],
+  unmergeCells: [["range"]],
+  sortRange: [["range"]],
+  updateBorders: [["range"]],
+  setDataValidation: [["range"]],
+  insertRange: [["range"]],
+  deleteRange: [["range"]],
+  updateCells: [["range", "start"]],
+  setBasicFilter: [["filter.range", "filter.tableId"]],
+  updateDimensionProperties: [["range", "dataSourceSheetRange"]],
+  autoResizeDimensions: [["dimensions", "dataSourceSheetDimensions"]],
+  copyPaste: [["source"], ["destination"]],
+  cutPaste: [["source"], ["destination"]],
+  moveDimension: [["source"]],
+};
+// Recorded-only requests addressing a sheet by a top-level `sheetId` (omitted = 0).
+const ON_SHEET = new Set(["clearBasicFilter", "appendDimension"]);
 
 const clone = <T>(v: T): T => structuredClone(v);
 const isObj = (v: unknown): v is Obj =>
@@ -118,7 +156,7 @@ const SKIP = "skip" as const;
 function dateCell(m: RegExpExecArray): Cell | null {
   const month = Number(m[1]);
   const day = Number(m[2]);
-  let year = m[3] === undefined ? new Date().getUTCFullYear() : Number(m[3]);
+  let year = m[3] === undefined ? FIXED_YEAR : Number(m[3]);
   if (m[3]?.length === 2) year += year < 30 ? 2000 : 1900;
   const ms = Date.UTC(year, month - 1, day);
   const d = new Date(ms);
@@ -130,7 +168,7 @@ function userEntered(s: string): Cell {
   if (s.startsWith("'")) return { v: s.slice(1) };
   if (s.startsWith("=")) return { v: "", f: s };
   if (NUMBER.test(s)) return { v: Number(s) };
-  if (PERCENT.test(s)) return { v: Number(s.slice(0, -1)) / 100 };
+  if (PERCENT.test(s)) return { v: Number(s.slice(0, -1)) / 100, fmt: s };
   if (BOOLEAN.test(s)) return { v: s.toLowerCase() === "true" };
   const date = DATE.exec(s);
   const asDate = date ? dateCell(date) : null;
@@ -198,6 +236,38 @@ function setCell(tab: Tab, r: number, c: number, cell: Cell | undefined): void {
   row[c - 1] = cell;
 }
 
+/** The tab as Google writes it in returned refs: quoted only when it has to be. */
+function tabPart(title: string): string {
+  const plain =
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(title) &&
+    !/^[A-Za-z]{1,3}\d+$/.test(title) && // looks like a cell, e.g. A1
+    !/^R\d*C\d*$/i.test(title); // looks like R1C1
+  return plain ? title : a1.quoteTab(title);
+}
+
+const typed = (v: Scalar): sheets_v4.Schema$ExtendedValue =>
+  typeof v === "number"
+    ? { numberValue: v }
+    : typeof v === "boolean"
+      ? { boolValue: v }
+      : { stringValue: v };
+
+function cellData(cell: Cell): sheets_v4.Schema$CellData {
+  if (cell.f !== undefined)
+    return { userEnteredValue: { formulaValue: cell.f } };
+  return {
+    userEnteredValue: typed(cell.v),
+    effectiveValue: typed(cell.v),
+    formattedValue: String(render(cell, "FORMATTED_VALUE")),
+  };
+}
+
+function at(v: unknown, path: string): unknown {
+  return path
+    .split(".")
+    .reduce<unknown>((o, k) => (isObj(o) ? o[k] : undefined), v);
+}
+
 function cellRef(row: number, col: number): string {
   return `${a1.indexToColumn(col)}${row}`;
 }
@@ -210,10 +280,7 @@ function blockRef(
   c1: number,
 ): string {
   const tl = cellRef(r0, c0);
-  return a1.range(
-    tab.title,
-    r0 === r1 && c0 === c1 ? tl : `${tl}:${cellRef(r1, c1)}`,
-  );
+  return `${tabPart(tab.title)}!${r0 === r1 && c0 === c1 ? tl : `${tl}:${cellRef(r1, c1)}`}`;
 }
 
 // ---- field masks ----
@@ -291,6 +358,18 @@ function outRange(
  * values and formulas, named and protected ranges. Every operation runs on a
  * copy of the state that is committed only if it succeeds, so a failing
  * `batchUpdate` applies nothing.
+ *
+ * Simplifications to know about:
+ * - `valuesAppend` table detection is "after the last row with any stored cell"
+ *   (from the range's start column), not Google's full table heuristics.
+ * - USER_ENTERED parses only `'`-literals, `=`/`+`/`-` formulas, plain numbers,
+ *   percents, TRUE/FALSE and `M/D[/Y]` dates (year-less → {@link FIXED_YEAR}).
+ *   ISO dates, `1,000`, `$5`, `1e5`, times and padded text stay text. Formulas
+ *   are not evaluated: they read as `""` except under `FORMULA`.
+ * - Requests that would change values but are recorded only (cells untouched):
+ *   copyPaste, cutPaste, moveDimension, insertRange/deleteRange, updateCells,
+ *   appendCells, appendDimension, autoFill, findReplace, sortRange and the rest
+ *   outside the structural set.
  */
 export class FakeSheets implements SheetsTransport {
   readonly calls: FakeSheetsCall[] = [];
@@ -414,7 +493,7 @@ export class FakeSheets implements SheetsTransport {
   async getSpreadsheet(
     p: Target & { fields: string },
   ): Promise<sheets_v4.Schema$Spreadsheet> {
-    this.calls.push({ op: "getSpreadsheet" });
+    this.calls.push({ op: "getSpreadsheet", fields: p.fields });
     return this.run(
       "getSpreadsheet",
       p,
@@ -570,22 +649,49 @@ export class FakeSheets implements SheetsTransport {
     return t;
   }
 
-  /** Resolves an A1 ref to its tab and bounds (null bounds = whole tab). */
+  /**
+   * Resolves an A1 ref to its tab and bounds (null bounds = whole tab), as Google
+   * does: `'quoted'` or unquoted title (no `'` in it) before `!`; a bare quoted
+   * title is the whole tab; a bare ref that parses as A1 addresses the first
+   * visible tab; any other bare text is a whole-tab title.
+   */
   private resolve(
     s: State,
     ref: string,
   ): { tab: Tab; bounds: ReturnType<typeof a1.parse> | null; closed: boolean } {
-    let title: string;
-    let rangePart: string | null;
-    try {
-      ({ tab: title, range: rangePart } = a1.split(ref));
-    } catch {
-      if (typeof ref !== "string" || ref.includes("!") || ref.startsWith("'")) {
-        throw parseError(String(ref));
+    if (typeof ref !== "string" || ref === "") throw parseError(String(ref));
+    const byTitle = (title: string): Tab | undefined => {
+      if (title.includes("'")) throw parseError(ref); // must be quoted
+      return s.tabs.find((t) => sameTitle(t.title, title));
+    };
+    const isRange = (text: string): boolean => {
+      try {
+        a1.parse(text);
+        return true;
+      } catch {
+        return false;
       }
-      [title, rangePart] = [ref, null];
+    };
+    let tab: Tab | undefined;
+    let rangePart: string | null;
+    if (ref.startsWith("'")) {
+      let split: ReturnType<typeof a1.split>;
+      try {
+        split = a1.split(ref);
+      } catch {
+        throw parseError(ref);
+      }
+      tab = s.tabs.find((t) => sameTitle(t.title, split.tab));
+      rangePart = split.range;
+    } else if (!ref.includes("!")) {
+      if (isRange(ref)) [tab, rangePart] = [s.tabs.find((t) => !t.hidden), ref];
+      else [tab, rangePart] = [byTitle(ref), null];
+    } else {
+      const bang = ref.indexOf("!");
+      tab = byTitle(ref.slice(0, bang));
+      rangePart = ref.slice(bang + 1);
+      if (bang === 0 || rangePart === "") throw parseError(ref);
     }
-    const tab = s.tabs.find((t) => sameTitle(t.title, title));
     if (!tab) throw parseError(ref);
     if (rangePart === null) return { tab, bounds: null, closed: false };
     try {
@@ -601,6 +707,13 @@ export class FakeSheets implements SheetsTransport {
 
   private read(s: State, ref: string, mode: RenderOption): GValueRange & Obj {
     const { tab, bounds } = this.resolve(s, ref);
+    const maxRow = Math.max(bounds?.startRow ?? 0, bounds?.endRow ?? 0);
+    const maxCol = Math.max(bounds?.startColumn ?? 0, bounds?.endColumn ?? 0);
+    if (maxRow > tab.rowCount || maxCol > tab.columnCount) {
+      throw badRequest(
+        `Range (${ref}) exceeds grid limits. Max rows: ${tab.rowCount}, max columns: ${tab.columnCount}`,
+      );
+    }
     const r0 = bounds?.startRow ?? 1;
     const r1 = bounds?.endRow ?? tab.rowCount;
     const c0 = bounds?.startColumn ?? 1;
@@ -708,9 +821,16 @@ export class FakeSheets implements SheetsTransport {
         const prs = s.protected
           .filter((pr) => (pr.range?.sheetId ?? 0) === t.sheetId)
           .map((pr) => ({ ...clone(pr), range: outRange(pr.range) }));
+        const rowData = t.cells.map((row) =>
+          row.length > 0
+            ? { values: Array.from(row, (c) => (c ? cellData(c) : {})) }
+            : {},
+        );
         return {
           properties: this.sheetProps(s, t),
           ...(prs.length > 0 ? { protectedRanges: prs } : {}),
+          // A broad mask (`*`, `sheets`) returns grid data, as on Google.
+          data: [rowData.length > 0 ? { rowData } : {}],
         };
       }),
       ...(s.named.length > 0
@@ -1018,10 +1138,27 @@ export class FakeSheets implements SheetsTransport {
         s.protected.splice(at, 1);
         return {};
       }
-      default:
-        // Recorded only, but every sheetId it names must exist.
+      default: {
+        // Recorded only, but checked for shape: required `fields` and ranges,
+        // and every sheet it names must exist.
+        if (
+          NEEDS_FIELDS.has(key) &&
+          (typeof body.fields !== "string" || body.fields.trim() === "")
+        ) {
+          throw fail("At least one field must be specified in 'fields'.");
+        }
+        for (const paths of NEEDS_RANGE[key] ?? []) {
+          const found = paths
+            .map((path) => at(body, path))
+            .find((v) => v !== undefined);
+          if (found === undefined)
+            throw fail(`${paths.join(" or ")} is required.`);
+          if (isObj(found)) byId(found.sheetId);
+        }
+        if (ON_SHEET.has(key)) byId(body.sheetId);
         this.checkSheetIds(body, (id) => byId(id));
         return {};
+      }
     }
   }
 
