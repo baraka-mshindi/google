@@ -4,8 +4,8 @@
 
 A server-side TypeScript library that lets multi-tenant apps (HRMS, ATS, …) send email
 through each tenant's **own** Google Workspace accounts via the Gmail API, with no SMTP
-and no per-tenant secrets in environment variables. Calendar and Sheets join later as
-further services on the same foundation.
+and no per-tenant secrets in environment variables. Calendar and Sheets are built on the
+same foundation.
 
 ---
 

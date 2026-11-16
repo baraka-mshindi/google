@@ -75,9 +75,11 @@ form the library quotes the tab title for you (single quotes, `'` doubled), so t
 with spaces, quotes, `!`, or names that look like a cell (`A1`, `2026`) work:
 
 ```ts
-"'Q1 2026'!A1:C10"; // string form: you quote
-{ tab: "Q1 2026", range: "A1:C10" }; // object form: the library quotes
-{ tab: "Q1 2026" }; // the whole tab
+import type { RangeRef } from "@mshindi-labs/google/sheets";
+
+const quoted: RangeRef = "'Q1 2026'!A1:C10"; // string form: you quote
+const block: RangeRef = { tab: "Q1 2026", range: "A1:C10" }; // the library quotes
+const whole: RangeRef = { tab: "Q1 2026" }; // the whole tab
 ```
 
 A tab is a title or `{ sheetId: number }`. `sheetId: 0` is valid (it is the default
@@ -306,9 +308,18 @@ const replies = await sheet.batch([
 Things to know:
 
 - **Positions are 1-based and inclusive**, like the Sheets UI and A1 notation.
-  `deleteRows("Log", 5, 2)` deletes rows 5 and 6 (start at row 5, count 2). Columns take
-  a letter range (`"B:D"`) or 1-based numbers. The library converts to Google's 0-based
-  grid ranges.
+  `deleteRows("Log", 5, 2)` deletes rows 5 and 6 (start at row 5, count 2). The library
+  converts to Google's 0-based grid ranges.
+- **Column arguments.** `setColumnWidth` and `autoResizeColumns` take a letter range
+  `"B:D"` or a 1-based inclusive pair `[2, 4]`. `insertColumns` and `deleteColumns` take
+  one starting column (`"C"` or `3`) plus a count:
+
+```ts
+req.setColumnWidth("Q1 2026", "B:D", 120); // or [2, 4]
+req.insertColumns("Q1 2026", "C", 2); // two columns before column C (or 3)
+req.deleteColumns("Q1 2026", 3, 1); // delete column C
+```
+
 - **A tab added in the batch can be used later in the same batch** by its title, as
   `"Q1 2026"` is above. If `addTab` has no `sheetId`, the library picks an unused one.
 - Tabs are resolved by title with **at most one** metadata read per batch, and none when
