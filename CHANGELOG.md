@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.2.0](https://github.com/baraka-mshindi/google/compare/google-v1.1.0...google-v1.2.0) (2026-11-16)
+
+
+### Features
+
+* **calendar:** add availability, slot suggestions and event status ([1c7bc2e](https://github.com/baraka-mshindi/google/commit/1c7bc2e0100def7451994b3c364d339a1039a5e3))
+* **calendar:** add Calendar API transport and retry policy ([c7424e6](https://github.com/baraka-mshindi/google/commit/c7424e665b9aabdc214175def051531b1045d5ba))
+* **calendar:** add Calendar service for interview scheduling ([b3018ad](https://github.com/baraka-mshindi/google/commit/b3018ad9e678eeed50d02976c40b5b86bccb0e00))
+* **calendar:** add slot finder with DST-safe time zone maths ([8070ae2](https://github.com/baraka-mshindi/google/commit/8070ae23c4ca983cea65e79952861369b082980d))
+* **calendar:** create events without duplicate invites ([f196748](https://github.com/baraka-mshindi/google/commit/f196748e008d167ed990934a79289a29944be8d8))
+* **calendar:** publish the /calendar subpath ([013178b](https://github.com/baraka-mshindi/google/commit/013178b819d0886066140f07f44bdf79574f4b02))
+* **calendar:** reschedule and cancel managed events ([017f817](https://github.com/baraka-mshindi/google/commit/017f8174d40b3304021a28da55c34134814a97c0))
+* **calendar:** validate event input and derive idempotent event ids ([00ef8b6](https://github.com/baraka-mshindi/google/commit/00ef8b682e473ba605c113255cb87d7402ee7531))
+* **core:** add calendar scopes, errors and audit events ([0f5d866](https://github.com/baraka-mshindi/google/commit/0f5d8661c05934de13e75c75c88b958e141c2fbf))
+
+
+### Bug Fixes
+
+* **calendar:** apply reschedules after manual edits and repair Meet links ([d50a37b](https://github.com/baraka-mshindi/google/commit/d50a37b27aa50a6fd25dc5877c4d6e7f207aa91a))
+* **calendar:** cancel never-invited pending events without notifying guests ([f6933d8](https://github.com/baraka-mshindi/google/commit/f6933d87f639e62c66cda6d803b54b3695637771))
+* **calendar:** emit created when a 401 re-run finds our landed release ([da9953c](https://github.com/baraka-mshindi/google/commit/da9953ca093ddd10774f2d3fa66b90663a5080df))
+* **calendar:** guard invite release with etag preconditions ([98666c6](https://github.com/baraka-mshindi/google/commit/98666c603e45468d2078cdf70c09f6c8b819076a))
+* **calendar:** resolve repeated wall times in 30-minute DST zones ([87dc249](https://github.com/baraka-mshindi/google/commit/87dc249a46220d57c9c7cbc610e521ff61f88e33))
+* **calendar:** support Node 18 with the Calendar API peer range ([5845f5c](https://github.com/baraka-mshindi/google/commit/5845f5c7ac0ff5bdff89cb50de69ee800d57b3a8))
+* **calendar:** validate slot params before any Google call and sanitize reads ([4a523c7](https://github.com/baraka-mshindi/google/commit/4a523c76e03696f494e87d52fe1f270ccd0ed131))
+
+
+### Documentation
+
+* **calendar:** add scheduling guide and update spec ([c55653f](https://github.com/baraka-mshindi/google/commit/c55653fbb54d910a753cfc81a901a96012bcdf85))
+* **calendar:** cover Node 18/20 install, testing and edge cases in the guide ([a14da0a](https://github.com/baraka-mshindi/google/commit/a14da0a6ad00830f7637583bfccacccc24ab5d64))
+
 ## [1.1.0](https://github.com/mshindi-labs/google/compare/google-v1.0.2...google-v1.1.0) (2026-11-05)
 
 
