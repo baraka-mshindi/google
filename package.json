@@ -4,11 +4,11 @@
   "description": "Multi-tenant Gmail and Google API utilities for TypeScript applications",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mshindi-labs/google.git"
+    "url": "git+https://github.com/baraka-mshindi/google.git"
   },
-  "homepage": "https://github.com/mshindi-labs/google#readme",
+  "homepage": "https://github.com/baraka-mshindi/google#readme",
   "bugs": {
-    "url": "https://github.com/mshindi-labs/google/issues"
+    "url": "https://github.com/baraka-mshindi/google/issues"
   },
   "type": "module",
   "exports": {
