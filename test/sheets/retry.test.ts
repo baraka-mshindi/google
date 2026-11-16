@@ -120,6 +120,16 @@ describe("classifySheetsError", () => {
           "Bob's Tab",
         ],
         ["tab without cells", "Unable to parse range: Ghost", "Ghost"],
+        [
+          "quoted tab with ! and no cells",
+          "Unable to parse range: 'A!B'",
+          "A!B",
+        ],
+        [
+          "quoted tab with ! and cells",
+          "Unable to parse range: 'A!B'!C1",
+          "A!B",
+        ],
         ["unparseable message", "unable to parse range", ""],
       ])("%s", (_n, message, tab) => {
         const e = failOf(http(400, "badRequest", { message }), idem);
@@ -172,8 +182,6 @@ describe("classifySheetsError", () => {
     ["ETIMEDOUT", net("ETIMEDOUT")],
     ["ECONNRESET", net("ECONNRESET")],
     ["ESOCKETTIMEDOUT", net("ESOCKETTIMEDOUT")],
-    ["TLS", net("ERR_TLS_CERT_ALTNAME_INVALID")],
-    ["CERT", net("CERT_HAS_EXPIRED")],
     ["ABORT_ERR", net("ABORT_ERR")],
     ["AbortError", Object.assign(new Error("x"), { name: "AbortError" })],
     ["socket hang up", new Error("socket hang up")],
@@ -185,6 +193,8 @@ describe("classifySheetsError", () => {
     ],
   ];
   const PRE_SEND: [string, unknown][] = [
+    ["TLS", net("ERR_TLS_CERT_ALTNAME_INVALID")],
+    ["CERT", net("CERT_HAS_EXPIRED")],
     ["ENOTFOUND", net("ENOTFOUND")],
     ["EAI_AGAIN", net("EAI_AGAIN")],
     ["ECONNREFUSED", net("ECONNREFUSED")],
@@ -371,7 +381,7 @@ describe("withSheetsRetry", () => {
   });
 
   it.each(BOTH)(
-    "classified errors never carry the bearer token (idempotent=%s)",
+    "classified errors never carry the bearer token (plain object, idempotent=%s)",
     async (idem) => {
       const raw = {
         message: "Request failed ya29.SECRET",
@@ -389,6 +399,30 @@ describe("withSheetsRetry", () => {
       expect(JSON.stringify(err)).not.toContain("ya29.SECRET");
       expect(String(err.cause)).not.toContain("ya29.SECRET");
       expect(JSON.stringify(err.cause)).not.toContain("ya29.SECRET");
+    },
+  );
+
+  it.each(BOTH)(
+    "classified errors never carry the bearer token (Error, idempotent=%s)",
+    async (idem) => {
+      const raw = Object.assign(new Error("Request failed ya29.SECRET"), {
+        code: 500,
+        config: { headers: { Authorization: "Bearer ya29.SECRET" } },
+        response: { status: 500 },
+      });
+      const { err, fn } = await run([raw], idem);
+      expect(err).toBeInstanceOf(
+        idem ? GoogleApiError : SheetsWriteOutcomeUnknownError,
+      );
+      expect(fn).toHaveBeenCalledTimes(idem ? 3 : 1);
+      // Redaction actually ran: the scrubbed cause keeps the message shape.
+      expect(err.cause.message).toBe("Request failed [REDACTED]");
+      expect(err.message).not.toContain("ya29.SECRET");
+      expect(String(err)).not.toContain("ya29.SECRET");
+      expect(JSON.stringify(err)).not.toContain("ya29.SECRET");
+      expect(String(err.cause)).not.toContain("ya29.SECRET");
+      expect(err.cause.stack).toBeTypeOf("string");
+      expect(err.cause.stack).not.toContain("ya29.SECRET");
     },
   );
 });

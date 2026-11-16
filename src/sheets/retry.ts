@@ -37,11 +37,18 @@ export class SheetsUnauthorizedSignal extends Error {
   }
 }
 
-// Failures that provably happened before the request reached Google (I10).
+// Failures that provably happened before the request reached Google (I10): Gmail's
+// pre-send set, i.e. DNS, connection refused and TLS handshake/certificate failures.
 const PRE_SEND_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
+const isPreSend = (code: string): boolean =>
+  PRE_SEND_CODES.has(code) ||
+  code.startsWith("ERR_TLS_") ||
+  code.startsWith("CERT_");
 // Ambiguous transport failures: the request may have been applied.
 const AMBIGUOUS_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ESOCKETTIMEDOUT"]);
 const PARSE_RANGE = /Unable to parse range:?\s*(.*)$/i;
+// A quoted tab title ('' escapes '), alone or followed by "!<cells>".
+const QUOTED_TAB = /^'((?:[^']|'')*)'(?:!|$)/;
 
 /** The tab named in Google's "Unable to parse range: <range>", else "". */
 function tabFromParseError(e: ErrLike): string {
@@ -50,12 +57,10 @@ function tabFromParseError(e: ErrLike): string {
     if (typeof s !== "string") continue;
     const range = PARSE_RANGE.exec(s)?.[1]?.trim();
     if (!range) continue;
+    const quoted = QUOTED_TAB.exec(range)?.[1];
+    if (quoted !== undefined) return redact(quoted.replace(/''/g, "'"));
     const bang = range.lastIndexOf("!");
-    let tab = bang === -1 ? range : range.slice(0, bang);
-    if (tab.length >= 2 && tab.startsWith("'") && tab.endsWith("'")) {
-      tab = tab.slice(1, -1).replace(/''/g, "'");
-    }
-    return redact(tab);
+    return redact(bang === -1 ? range : range.slice(0, bang));
   }
   return "";
 }
@@ -107,15 +112,11 @@ function classify(
   if (status !== null) {
     return { kind: "fail", error: new GoogleApiError(status, reason, opts) };
   }
-  if (code !== null && PRE_SEND_CODES.has(code)) {
+  if (code !== null && isPreSend(code)) {
     return { kind: "retry", delayMs: null };
   }
   if (
-    (code !== null &&
-      (AMBIGUOUS_CODES.has(code) ||
-        code.startsWith("ERR_TLS_") ||
-        code.startsWith("CERT_") ||
-        code === "ABORT_ERR")) ||
+    (code !== null && (AMBIGUOUS_CODES.has(code) || code === "ABORT_ERR")) ||
     e.name === "AbortError" ||
     /socket hang up/i.test(readMessages(e))
   ) {
