@@ -1,4 +1,6 @@
 import type { sheets_v4 } from "@googleapis/sheets";
+import { OAuth2Client } from "google-auth-library";
+import { loadPeer } from "../core/peer.js";
 
 export type GValueRange = {
   range?: string | null;
@@ -57,3 +59,139 @@ export const INFO_FIELDS =
 
 /** Field mask for resolving tab titles and ids. */
 export const TAB_FIELDS = "sheets.properties(sheetId,title)";
+
+type Call<D> = (params: Record<string, unknown>) => Promise<{ data: D }>;
+type SheetsApi = {
+  spreadsheets: {
+    get: Call<sheets_v4.Schema$Spreadsheet>;
+    batchUpdate: Call<{ replies?: sheets_v4.Schema$Response[] | null }>;
+    values: {
+      get: Call<GValueRange>;
+      batchGet: Call<{ valueRanges?: GValueRange[] | null }>;
+      update: Call<{
+        updatedRange?: string | null;
+        updatedCells?: number | null;
+      }>;
+      batchUpdate: Call<{ totalUpdatedCells?: number | null }>;
+      append: Call<{ updates?: { updatedRange?: string | null } | null }>;
+      batchClear: Call<unknown>;
+    };
+  };
+};
+type SheetsModule = {
+  sheets(opts: { version: "v4"; auth: unknown }): SheetsApi;
+};
+
+/**
+ * Talks to the Google Sheets API v4. Errors are thrown as-is (gaxios errors
+ * carry the bearer token); the retry wrapper classifies them so only sanitized
+ * GoogleLibError instances leave the library.
+ */
+export function createSheetsApiTransport(): SheetsTransport {
+  const client = async (accessToken: string): Promise<SheetsApi> => {
+    const mod = await loadPeer<
+      Partial<SheetsModule> & { default?: SheetsModule }
+    >("@googleapis/sheets");
+    const { sheets } = (mod.sheets ? mod : mod.default) as SheetsModule;
+    const auth = new OAuth2Client();
+    auth.setCredentials({ access_token: accessToken });
+    return sheets({ version: "v4", auth });
+  };
+
+  return {
+    async getSpreadsheet({ accessToken, spreadsheetId, fields }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.get({
+        spreadsheetId,
+        fields,
+        includeGridData: false,
+      });
+      return data;
+    },
+    async valuesGet({ accessToken, spreadsheetId, range, valueRenderOption }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+        valueRenderOption,
+      });
+      return data;
+    },
+    async valuesBatchGet({
+      accessToken,
+      spreadsheetId,
+      ranges,
+      valueRenderOption,
+    }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.values.batchGet({
+        spreadsheetId,
+        ranges,
+        valueRenderOption,
+      });
+      return data;
+    },
+    async valuesUpdate({
+      accessToken,
+      spreadsheetId,
+      range,
+      values,
+      valueInputOption,
+    }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.values.update({
+        spreadsheetId,
+        range,
+        valueInputOption,
+        requestBody: { values },
+      });
+      return data;
+    },
+    async valuesBatchUpdate({
+      accessToken,
+      spreadsheetId,
+      data: rows,
+      valueInputOption,
+    }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: { valueInputOption, data: rows },
+      });
+      return data;
+    },
+    async valuesAppend({
+      accessToken,
+      spreadsheetId,
+      range,
+      values,
+      valueInputOption,
+      insertDataOption,
+    }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.values.append({
+        spreadsheetId,
+        range,
+        valueInputOption,
+        insertDataOption,
+        requestBody: { values },
+      });
+      return data;
+    },
+    async valuesBatchClear({ accessToken, spreadsheetId, ranges }) {
+      const api = await client(accessToken);
+      await api.spreadsheets.values.batchClear({
+        spreadsheetId,
+        requestBody: { ranges },
+      });
+    },
+    async batchUpdate({ accessToken, spreadsheetId, requests }) {
+      const api = await client(accessToken);
+      const { data } = await api.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests, includeSpreadsheetInResponse: false },
+      });
+      return data;
+    },
+  };
+}
