@@ -58,21 +58,23 @@ const API_DISABLED_REASONS = new Set([
 ]);
 
 /**
- * `errors[].reason`, else the first `google.rpc.ErrorInfo` reason in
- * `error.details[]` (newer APIs send `SERVICE_DISABLED` only there).
+ * The "API not enabled" reason anywhere in `error.errors[]` or the
+ * `google.rpc.ErrorInfo` entries of `error.details[]` (newer APIs send
+ * `SERVICE_DISABLED` only there), else null.
  */
-function readSheetsReason(e: ErrLike): string | null {
-  const reason = readReason(e);
-  if (reason !== null) return reason;
-  const details = (e.response?.data?.error as { details?: unknown } | undefined)
-    ?.details;
-  if (!Array.isArray(details)) return null;
-  for (const d of details) {
-    const r = (d as { reason?: unknown } | null)?.reason;
-    if (typeof r === "string") return r;
+function apiDisabledReason(e: ErrLike): string | null {
+  const error = e.response?.data?.error as
+    { errors?: unknown; details?: unknown } | undefined;
+  const entries = [e.errors, error?.errors, error?.details].flatMap((list) =>
+    Array.isArray(list) ? (list as unknown[]) : [],
+  );
+  for (const entry of entries) {
+    const r = (entry as { reason?: unknown } | null)?.reason;
+    if (typeof r === "string" && API_DISABLED_REASONS.has(r)) return r;
   }
   return null;
 }
+
 // A quoted tab title ('' escapes '), alone or followed by "!<cells>".
 const QUOTED_TAB = /^'((?:[^']|'')*)'(?:!|$)/;
 
@@ -109,7 +111,7 @@ function classify(
   }
   const e = asErr(err);
   const status = readStatus(e);
-  const reason = readSheetsReason(e);
+  const reason = readReason(e);
   const code = readNetCode(e);
   const opts: GoogleErrorOptions = { ...ids, cause: err };
   const unknown = (): SheetsErrorClass => ({
@@ -130,8 +132,9 @@ function classify(
       error: new SpreadsheetNotFoundError(undefined, opts),
     };
   }
-  if (status === 403 && reason !== null && API_DISABLED_REASONS.has(reason)) {
-    return { kind: "fail", error: new GoogleApiError(403, reason, opts) };
+  const disabled = status === 403 ? apiDisabledReason(e) : null;
+  if (disabled !== null) {
+    return { kind: "fail", error: new GoogleApiError(403, disabled, opts) };
   }
   if (status === 403) {
     return {

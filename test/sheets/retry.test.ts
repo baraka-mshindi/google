@@ -156,6 +156,18 @@ describe("classifySheetsError", () => {
           }),
           "accessNotConfigured",
         ],
+        [
+          "generic errors[] reason with SERVICE_DISABLED in details[]",
+          disabled({
+            code: 403,
+            errors: [{ reason: "forbidden" }],
+            details: [
+              { "@type": "type.googleapis.com/google.rpc.Help" },
+              { reason: "SERVICE_DISABLED" },
+            ],
+          }),
+          "SERVICE_DISABLED",
+        ],
       ])("%s", (_n, err, reason) => {
         const e = failOf(err, idem);
         expect(e).not.toBeInstanceOf(SpreadsheetAccessDeniedError);
@@ -163,6 +175,26 @@ describe("classifySheetsError", () => {
         expect((e as GoogleApiError).status).toBe(403);
         expect((e as GoogleApiError).reason).toBe(reason);
       });
+    },
+  );
+
+  it.each(BOTH)(
+    "a details[] reason only matters for the disabled-API 403 (idempotent=%s)",
+    (idem) => {
+      const withDetails = (status: number, reason: string) =>
+        Object.assign(new Error(`http ${status}`), {
+          response: {
+            status,
+            headers: {},
+            data: { error: { code: status, details: [{ reason }] } },
+          },
+        });
+      const e = failOf(withDetails(409, "ABORTED"), idem);
+      expect(e).toBeInstanceOf(GoogleApiError);
+      expect((e as GoogleApiError).reason).toBeNull();
+      expect(
+        failOf(withDetails(403, "IAM_PERMISSION_DENIED"), idem),
+      ).toBeInstanceOf(SpreadsheetAccessDeniedError);
     },
   );
 
