@@ -45,6 +45,27 @@ describe("batch tab resolution", () => {
     expect(fake.tab("Log")!.frozenRows).toBe(2);
   });
 
+  it("matches non-ASCII titles case-insensitively", async () => {
+    const { sheet, fake } = await setup({
+      tabs: [...tabs, { title: "Ünïcode", sheetId: 9 }],
+    });
+    await sheet.batch([req.freeze("üNÏCODE", { rows: 3 })]);
+    expect(fake.tab("Ünïcode")!.frozenRows).toBe(3);
+  });
+
+  it("only addTab titles resolve in-batch: a renamed or duplicated title fails closed", async () => {
+    for (const first of [
+      req.renameTab("Log", "Archive"),
+      req.duplicateTab("Log", "Archive"),
+    ]) {
+      const { sheet, ops } = await setup({ tabs });
+      await expect(
+        sheet.batch([first, req.freeze("Archive", { rows: 1 })]),
+      ).rejects.toMatchObject({ code: "sheet_tab_not_found", tab: "Archive" });
+      expect(ops("batchUpdate")).toHaveLength(0);
+    }
+  });
+
   it("a { sheetId }-only batch makes none", async () => {
     const { sheet, fake } = await setup({ tabs });
     await sheet.batch([
@@ -235,5 +256,38 @@ describe("batch retries (I10)", () => {
     await sheet.batch([req.addTab("Once", { sheetId: 8 })]);
     expect(ops("batchUpdate")).toHaveLength(2);
     expect(fake.appliedRequests).toHaveLength(1);
+  });
+});
+
+describe("moveTab uses before-the-move indexes (ruling R4)", () => {
+  const abc = [
+    { title: "A", sheetId: 0 },
+    { title: "B", sheetId: 1 },
+    { title: "C", sheetId: 2 },
+  ];
+  const order = (fake: { tab(t: string): { index: number } | undefined }) =>
+    ["A", "B", "C"].sort((x, y) => fake.tab(x)!.index - fake.tab(y)!.index);
+
+  it.each([
+    ["A", 1, ["A", "B", "C"]], // right by one needs target + 1, so 1 is a no-op
+    ["A", 2, ["B", "A", "C"]],
+    ["A", 3, ["B", "C", "A"]],
+    ["C", 0, ["C", "A", "B"]], // left: index is the new position
+    ["C", 1, ["A", "C", "B"]],
+  ] as const)("moveTab(%s, %d) → %j", async (tab, index, expected) => {
+    const { sheet, fake } = await setup({ tabs: abc });
+    await sheet.batch([req.moveTab(tab, index)]);
+    expect(order(fake)).toEqual(expected);
+    expect(fake.appliedRequests).toEqual([
+      {
+        updateSheetProperties: {
+          properties: {
+            sheetId: abc.find((t) => t.title === tab)!.sheetId,
+            index,
+          },
+          fields: "index",
+        },
+      },
+    ]);
   });
 });

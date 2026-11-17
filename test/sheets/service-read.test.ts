@@ -13,7 +13,8 @@ import { INFO_FIELDS, TAB_FIELDS } from "../../src/sheets/transport.js";
 import { sheetsHttpError } from "../../src/testing/fake-sheets.js";
 import { setup } from "./service-setup.js";
 
-const AWKWARD = ["Q1 2026", "Bob's", "A1", "2026"];
+// Spec §8 defect 3 (spaces, `'`, `!`, cell-like) plus non-ASCII text.
+const AWKWARD = ["Q1 2026", "Bob's", "Hi!", "A1", "2026", "Ünïcode"];
 
 describe("open", () => {
   it("validates the three ids without calling Google", async () => {
