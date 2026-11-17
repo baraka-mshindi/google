@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.3.0](https://github.com/baraka-mshindi/google/compare/google-v1.2.1...google-v1.3.0) (2026-11-17)
+
+
+### Features
+
+* **core:** add Sheets scope, errors and /sheets contracts ([c436fc2](https://github.com/baraka-mshindi/google/commit/c436fc285896dcbede324cbbd9790610035abf7b))
+* **sheets:** add A1 utilities and literal-safe cell encoding ([4cedf2f](https://github.com/baraka-mshindi/google/commit/4cedf2f251ff10dcc4613fe0f4e5e6022e745a69))
+* **sheets:** add batch request builders ([1d5e02a](https://github.com/baraka-mshindi/google/commit/1d5e02a90278215b570c12c3c3b191c5f008dad3))
+* **sheets:** add Google Sheets API transport ([ef32b31](https://github.com/baraka-mshindi/google/commit/ef32b31e096d9eaa78ef9c069990770897ba6027))
+* **sheets:** add idempotency-aware retry policy ([26814a1](https://github.com/baraka-mshindi/google/commit/26814a174e26e6fe7021515fe07c138205143400))
+* **sheets:** add the /sheets service and publish the subpath ([b0fb11c](https://github.com/baraka-mshindi/google/commit/b0fb11c154088caa25180048e0f649b7677af273))
+* **sheets:** add the /sheets subpath, migrated from @mshindi-labs/gsheets ([bedabc9](https://github.com/baraka-mshindi/google/commit/bedabc9c3cfcf7044d519fcd48bb9e68269983aa))
+* **testing:** add FakeSheets transport ([1c855d7](https://github.com/baraka-mshindi/google/commit/1c855d71316261d91d64d8a1e7bd12c8dfc15914))
+
+
+### Bug Fixes
+
+* **sheets:** classify disabled-API 403s, unknown sheetIds and client init failures ([ca343f1](https://github.com/baraka-mshindi/google/commit/ca343f186aae49c5fc70b68b7c9f0e2d9ff857c4))
+* **sheets:** fail closed on unknown input mode and empty formulas ([b3ad102](https://github.com/baraka-mshindi/google/commit/b3ad1024785fb8649434bc4c13dc30822b9d5bad))
+* **sheets:** keep the optional sheets peer out of shared type declarations ([b91902e](https://github.com/baraka-mshindi/google/commit/b91902e5086d70e180d6c15cecb8862814f6f32e))
+* **sheets:** look for the disabled-API reason without changing other reasons ([0f15bd4](https://github.com/baraka-mshindi/google/commit/0f15bd4d8367ef077f26c00b63dc4e448af84e91))
+* **sheets:** reject mixed A1 pairs and reference-like named-range names ([effc903](https://github.com/baraka-mshindi/google/commit/effc90347165a4438998e87b8de311a2830d706e))
+* **sheets:** retry pre-send TLS failures and parse quoted tabs ([1e94af4](https://github.com/baraka-mshindi/google/commit/1e94af4d3040c791c18e7039a85a9245d921e0ed))
+* **testing:** tighten FakeSheets fidelity ([1da9f43](https://github.com/baraka-mshindi/google/commit/1da9f43ea4831430a4bda121bbdbf43feaf722ef))
+
+
+### Code Refactoring
+
+* **core:** share the connection token path ([e1ba283](https://github.com/baraka-mshindi/google/commit/e1ba283f1246e471556185627c3e04fa0de2c05f))
+* **core:** share the retry loop ([760c098](https://github.com/baraka-mshindi/google/commit/760c0986d788429d75edcd0f248249c4c0a428d1))
+
+
+### Documentation
+
+* **sheets:** add /sheets design ([ff4d15e](https://github.com/baraka-mshindi/google/commit/ff4d15e77b70e440c5ecd751c1f4a0e0c1a7fca3))
+* **sheets:** add /sheets implementation plan ([640ef33](https://github.com/baraka-mshindi/google/commit/640ef33a175ce012b1b692c294fd5df83aa5ab11))
+* **sheets:** add Sheets guide and update spec ([ab8ca07](https://github.com/baraka-mshindi/google/commit/ab8ca077f25bc8da79475195b4dd15b75960aaf8))
+* **sheets:** document the review fixes in the guide and spec ([1b2d66e](https://github.com/baraka-mshindi/google/commit/1b2d66e13c69b4fb219749009386c902a0dab143))
+* **sheets:** fix range samples and column guidance ([e7c6ac3](https://github.com/baraka-mshindi/google/commit/e7c6ac3867735a3732c854437f176118607f1e75))
+* **sheets:** include TLS failures in the I10 pre-send set ([882258d](https://github.com/baraka-mshindi/google/commit/882258dfd9cbeb0cd30c1ccf82f1ad5315c8ee32))
+* **sheets:** say when id-less addTab ids are assigned ([b4a0bbe](https://github.com/baraka-mshindi/google/commit/b4a0bbe8a5f2b8fcabe658e35ff0e2d7f35e2f38))
+* **sheets:** spell out a1 return shapes and getRows keys ([2271e75](https://github.com/baraka-mshindi/google/commit/2271e757aca60e4b211d23dfd7a9ffa232c38d8a))
+
 ## [1.2.1](https://github.com/baraka-mshindi/google/compare/google-v1.2.0...google-v1.2.1) (2026-11-16)
 
 
