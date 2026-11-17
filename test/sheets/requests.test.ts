@@ -428,6 +428,26 @@ describe("validation at call time", () => {
     expect(fieldOf(() => req.sort("Log", "A1:B2", []))).toBe("specs");
     expect(fieldOf(() => req.addNamedRange("1bad", "Log", "A1"))).toBe("name");
     expect(fieldOf(() => req.addNamedRange("a-b", "Log", "A1"))).toBe("name");
+    // Names Google refuses because they read as references or booleans.
+    for (const name of [
+      "A1",
+      "xfd99",
+      "ZZZ1",
+      "R1C1",
+      "r2c",
+      "RC",
+      "R5C",
+      "true",
+      "FALSE",
+    ]) {
+      expect(
+        fieldOf(() => req.addNamedRange(name, "Log", "A1")),
+        name,
+      ).toBe("name");
+    }
+    for (const name of ["AAAA1", "R1C1x", "Totals_2026", "_A1", "A1_"]) {
+      expect(() => req.addNamedRange(name, "Log", "A1"), name).not.toThrow();
+    }
     expect(fieldOf(() => req.deleteNamedRange(""))).toBe("namedRangeId");
     expect(fieldOf(() => req.unprotect(1.5))).toBe("protectedRangeId");
     expect(fieldOf(() => req.protect("Log", { range: "" }))).toBe("range");

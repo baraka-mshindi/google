@@ -101,12 +101,24 @@ function ordered(
   return a !== null && b !== null && a > b ? [b, a] : [a, b];
 }
 
+const shape = (s: Side): "cell" | "column" | "row" =>
+  s.col !== null && s.row !== null ? "cell" : s.col !== null ? "column" : "row";
+
+/**
+ * 1-based bounds of `B2`, `A1:C10`, `B:D`, `2:5` or `A2:C` (a cell to a column:
+ * open-ended rows). Other mixed pairs such as `2:A` or `A1:5` are rejected:
+ * Google cannot parse them either.
+ */
 function parse(rangeText: string): GridBounds {
   if (typeof rangeText !== "string") throw badRange("range must be a string");
   const parts = rangeText.split(":");
   if (parts.length > 2) throw badRange(JSON.stringify(rangeText));
   const start = parseSide(parts[0] ?? "", rangeText);
   const end = parts.length === 2 ? parseSide(parts[1] ?? "", rangeText) : start;
+  const pair = `${shape(start)}:${shape(end)}`;
+  if (shape(start) !== shape(end) && pair !== "cell:column") {
+    throw badRange(JSON.stringify(rangeText));
+  }
   const [startRow, endRow] = ordered(start.row, end.row);
   const [startColumn, endColumn] = ordered(start.col, end.col);
   return { startRow, endRow, startColumn, endColumn };

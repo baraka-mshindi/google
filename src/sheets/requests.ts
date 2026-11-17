@@ -244,6 +244,25 @@ const PASTE_TYPES = {
 } as const;
 
 const NAMED_RANGE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,249}$/;
+// Names Google refuses because they read as a reference or a boolean:
+// an A1 cell (`A1`, `xfd99`), an R1C1 ref (`R1C1`, `RC`) or `TRUE`/`FALSE`.
+const RESERVED_NAME = [/^[A-Za-z]{1,3}\d+$/, /^R\d*C\d*$/i, /^(true|false)$/i];
+
+function namedRangeName(name: unknown): string {
+  if (typeof name !== "string" || !NAMED_RANGE_NAME.test(name)) {
+    throw bad(
+      "name",
+      "name must start with a letter or underscore and use letters, digits or underscores (max 250)",
+    );
+  }
+  if (RESERVED_NAME.some((re) => re.test(name))) {
+    throw bad(
+      "name",
+      "name must not look like a cell reference (A1, R1C1) or TRUE/FALSE",
+    );
+  }
+  return name;
+}
 
 /**
  * Batch request builders. Pure: they validate arguments and return an opaque
@@ -314,7 +333,12 @@ export const req = {
     }));
   },
 
-  /** `index` is the 0-based target position. */
+  /**
+   * `index` counts tab positions BEFORE the move (Google's semantics), 0-based.
+   * Moving left, it is the tab's new position. Moving right, it is one more
+   * than the new position: with tabs `[A, B, C]`, `moveTab("A", 2)` gives
+   * `[B, A, C]` and `moveTab("A", 3)` gives `[B, C, A]`.
+   */
   moveTab(tab: TabRef, index: number): SheetsRequest {
     return tabProps(tab, { index: int(index, "index", 0) }, "index");
   },
@@ -542,13 +566,12 @@ export const req = {
     }));
   },
 
+  /**
+   * `name`: letters, digits and underscores, starting with a letter or `_`;
+   * names that read as a cell (`A1`, `R1C1`) or `TRUE`/`FALSE` are rejected.
+   */
   addNamedRange(name: string, tab: TabRef, range: string): SheetsRequest {
-    if (typeof name !== "string" || !NAMED_RANGE_NAME.test(name)) {
-      throw bad(
-        "name",
-        "name must start with a letter or underscore and use letters, digits or underscores (max 250)",
-      );
-    }
+    namedRangeName(name);
     const t = tabRef(tab);
     const r = rangeText(range);
     return make([t], (ctx) => ({
@@ -558,6 +581,10 @@ export const req = {
     }));
   },
 
+  /**
+   * Takes the range's `namedRangeId` (from `getInfo().namedRanges`), not its
+   * name: Google's `deleteNamedRange` deletes by id only.
+   */
   deleteNamedRange(namedRangeId: string): SheetsRequest {
     const id = title(namedRangeId, "namedRangeId");
     return make([], () => ({ deleteNamedRange: { namedRangeId: id } }));

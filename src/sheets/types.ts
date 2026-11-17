@@ -67,6 +67,11 @@ export type FoundRow = { rowNumber: number; values: (CellValue | null)[] };
 /** A column letter such as `"C"`, or a header name in the header row. */
 export type ColumnRef = string | { header: string };
 
+/**
+ * Where `append` wrote: Google's `updatedRange` and its 1-based first and last
+ * rows. `firstRow` and `lastRow` are `0` when that range cannot be parsed (the
+ * rows were still written).
+ */
 export type AppendResult = { range: string; firstRow: number; lastRow: number };
 
 /** 1-based inclusive bounds; `null` means open on that side. */
@@ -135,5 +140,13 @@ export interface SpreadsheetHandle {
     rows: CellInput[][],
     opts?: { input?: InputMode; insert?: "insert_rows" | "overwrite" },
   ): Promise<AppendResult>;
+  /**
+   * Sends `req.*` requests in one atomic `spreadsheets.batchUpdate` (not
+   * idempotent: see I10) and returns one reply per request. Tab titles resolve
+   * against the spreadsheet, plus tabs an earlier `req.addTab` in the same batch
+   * creates; a title made by `renameTab` or `duplicateTab` in the same batch does
+   * not resolve and throws `SheetTabNotFoundError` before anything is sent (use a
+   * second batch, or `{ sheetId }`).
+   */
   batch(requests: SheetsRequest[]): Promise<sheets_v4.Schema$Response[]>;
 }

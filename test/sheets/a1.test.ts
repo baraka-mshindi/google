@@ -88,6 +88,19 @@ describe("a1.parse", () => {
       endColumn: 3,
     });
   });
+  it("accepts only cell:cell, column:column, row:row and cell:column pairs", () => {
+    for (const ok of ["A1:B2", "A:C", "2:5", "A2:C", "B2"]) {
+      expect(() => a1.parse(ok)).not.toThrow();
+    }
+    // Google answers "Unable to parse range" for these, which would read as a
+    // missing tab; reject them locally instead.
+    for (const bad of ["2:A", "A:2", "A1:5", "5:A1", "A:C5", "B:A1"]) {
+      expect(
+        fieldOf(() => a1.parse(bad)),
+        bad,
+      ).toBe("range");
+    }
+  });
   it("rejects malformed ranges", () => {
     for (const bad of ["A0", "1A", "A1:", "", ":A1", "AAAA1", "A1:B2:C3"]) {
       expect(fieldOf(() => a1.parse(bad))).toBe("range");

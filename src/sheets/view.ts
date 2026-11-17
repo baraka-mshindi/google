@@ -1,4 +1,5 @@
 // Pure mapping of Sheets API responses into the library's public shapes.
+import { InvalidSheetsInputError } from "../core/errors.js";
 import { a1 } from "./a1.js";
 import type { GGridRange, GSpreadsheet } from "./transport.js";
 import type {
@@ -112,8 +113,8 @@ export function toInfo(
 
 /**
  * `{ range, firstRow, lastRow }` from Google's `updates.updatedRange` (the tab is
- * quoted only when needed). The rows are already written, so an unparseable
- * range never throws: rows read as 0.
+ * quoted only when needed). The rows are already written, so a range a1 cannot
+ * parse never throws: rows read as 0. Any other error is a bug and propagates.
  */
 export function appendResult(
   updatedRange: string | null | undefined,
@@ -124,7 +125,8 @@ export function appendResult(
     const b = part === null ? null : a1.parse(part);
     const firstRow = b?.startRow ?? 0;
     return { range, firstRow, lastRow: b?.endRow ?? firstRow };
-  } catch {
+  } catch (err) {
+    if (!(err instanceof InvalidSheetsInputError)) throw err;
     return { range, firstRow: 0, lastRow: 0 };
   }
 }
