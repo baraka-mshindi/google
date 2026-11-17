@@ -88,9 +88,12 @@ describe("envelope", () => {
   });
 
   it("uses a fresh DEK and IV per call", async () => {
+    // 32 bytes so the ciphertexts collide only with negligible probability;
+    // a 1-byte plaintext gives a 1-byte ciphertext that matches 1 run in 256.
+    const plain = "x".repeat(32);
     const [a, b] = await Promise.all([
-      encryptValue("x", aad, kp),
-      encryptValue("x", aad, kp),
+      encryptValue(plain, aad, kp),
+      encryptValue(plain, aad, kp),
     ]);
     expect(a.iv).not.toBe(b.iv);
     expect(a.wdek).not.toBe(b.wdek);
