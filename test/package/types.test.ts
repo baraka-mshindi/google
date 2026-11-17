@@ -23,12 +23,15 @@ const tsc = require.resolve("typescript/lib/tsc.js");
 const PEER = "@googleapis/sheets";
 const NON_SHEETS = ["core", "gmail", "calendar", "postgres", "testing"];
 
-/** Every specifier in `import … from '…'`, `export … from '…'` and `import '…'`. */
+/** Every specifier in `import … from '…'`, `export … from '…'`, `import '…'` and `import('…')`. */
 function specifiers(source: string): string[] {
   const out: string[] = [];
   for (const m of source.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g))
     out.push(m[1]!);
   for (const m of source.matchAll(/\bimport\s+['"]([^'"]+)['"]/g)) {
+    out.push(m[1]!);
+  }
+  for (const m of source.matchAll(/\bimport\(\s*['"]([^'"]+)['"]/g)) {
     out.push(m[1]!);
   }
   return out;
