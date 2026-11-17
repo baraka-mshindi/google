@@ -11,7 +11,9 @@ const h = vi.hoisted(() => ({
   vBatchClear: vi.fn(),
   sheets: vi.fn(),
 }));
-vi.mock("@googleapis/sheets", () => ({
+vi.mock("@googleapis/sheets", async (importOriginal) => ({
+  // The real auth, so the client is built as in production.
+  auth: (await importOriginal<typeof import("@googleapis/sheets")>()).auth,
   sheets: (...a: unknown[]) => {
     h.sheets(...a);
     return {
