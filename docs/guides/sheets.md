@@ -322,10 +322,10 @@ req.deleteColumns("Q1 2026", 3, 1); // delete column C
 ```
 
 - **A tab added in the batch can be used later in the same batch** by its title, as
-  `"Q1 2026"` is above. When an id-less `addTab`'s title is referenced later in the
-  batch, the library gives the new tab one id above every existing and in-batch id
-  (from the one tab lookup). A lone id-less `addTab` lets Google pick the id, which
-  comes back in the reply.
+  `"Q1 2026"` is above. When the batch needs its tab lookup (any request names a tab
+  by title), the library gives every id-less `addTab` an id above all existing and
+  in-batch ids. Otherwise, as for a lone `addTab`, Google picks the id, which comes
+  back in the reply.
 - **Only `addTab` titles resolve in-batch.** A title produced by `renameTab` or
   `duplicateTab` earlier in the same batch does not: the batch fails with
   `SheetTabNotFoundError` before anything is sent. Use the old title or `{ sheetId }`,

@@ -176,10 +176,12 @@ A1 notation (`deleteRows("Log", 5, 2)` deletes rows 5–6); the library converts
 API's 0-based half-open grid ranges. Columns accept a letter range (`"B:D"`) or 1-based
 numbers.
 
-A tab added in a batch can be referenced by title later in the same batch: if
-`addTab` has no `sheetId` and its title is referenced later in the batch, the library
-assigns max(existing ids, in-batch ids) + 1 from the one tab lookup before sending
-(ruling R5); a lone id-less `addTab` lets Google assign the id, returned in the reply.
+A tab added in a batch can be referenced by title later in the same batch. When the
+batch needs its one tab lookup (any title reference not covered by an earlier `addTab`
+with an explicit `sheetId`), the library gives every id-less `addTab` max(existing
+ids, in-batch ids) + 1, + 2, … before sending (ruling R5). Without a lookup (a lone
+id-less `addTab`, or only `{ sheetId }` references), Google assigns the id, returned
+in the reply.
 Only `addTab` titles resolve in-batch: a title produced by `renameTab` or
 `duplicateTab` earlier in the same batch does not, and fails closed with
 `SheetTabNotFoundError` before anything is sent.

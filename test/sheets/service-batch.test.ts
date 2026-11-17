@@ -114,6 +114,14 @@ describe("batch tab resolution", () => {
     expect(fake.tab("Archive")).toMatchObject({ sheetId: 77, frozenRows: 3 });
   });
 
+  it("once the batch looks tabs up, every id-less addTab gets an id, referenced or not", async () => {
+    const { sheet, fake } = await setup({ tabs });
+    await sheet.batch([req.addTab("X"), req.freeze("Sheet1", { rows: 1 })]);
+    expect(fake.appliedRequests[0]).toEqual({
+      addSheet: { properties: { title: "X", sheetId: 6 } },
+    });
+  });
+
   it("a lone addTab needs no lookup and returns the new sheetId", async () => {
     const { sheet, fake } = await setup({ tabs });
     const replies = await sheet.batch([req.addTab("New")]);
