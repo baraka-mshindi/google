@@ -19,6 +19,7 @@ import type { ErrLike } from "../core/google-http.js";
 import { redact } from "../core/redact.js";
 import { RATE_REASONS, runWithRetry } from "../core/retry-loop.js";
 import type { RetryOptions } from "../core/retry-loop.js";
+import { SheetsClientInitError } from "./transport.js";
 
 export type { RetryOptions };
 
@@ -47,6 +48,31 @@ const isPreSend = (code: string): boolean =>
 // Ambiguous transport failures: the request may have been applied.
 const AMBIGUOUS_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ESOCKETTIMEDOUT"]);
 const PARSE_RANGE = /Unable to parse range:?\s*(.*)$/i;
+// Google's batchUpdate answer for a sheetId that is not in the spreadsheet.
+const NO_GRID = /\bNo grid with id:\s*(\d+)/i;
+// 403s that mean "the Sheets API is not enabled for the OAuth client's project",
+// not "this account cannot open the spreadsheet" (ruling R7).
+const API_DISABLED_REASONS = new Set([
+  "accessNotConfigured",
+  "SERVICE_DISABLED",
+]);
+
+/**
+ * `errors[].reason`, else the first `google.rpc.ErrorInfo` reason in
+ * `error.details[]` (newer APIs send `SERVICE_DISABLED` only there).
+ */
+function readSheetsReason(e: ErrLike): string | null {
+  const reason = readReason(e);
+  if (reason !== null) return reason;
+  const details = (e.response?.data?.error as { details?: unknown } | undefined)
+    ?.details;
+  if (!Array.isArray(details)) return null;
+  for (const d of details) {
+    const r = (d as { reason?: unknown } | null)?.reason;
+    if (typeof r === "string") return r;
+  }
+  return null;
+}
 // A quoted tab title ('' escapes '), alone or followed by "!<cells>".
 const QUOTED_TAB = /^'((?:[^']|'')*)'(?:!|$)/;
 
@@ -71,9 +97,19 @@ function classify(
   ids: Ids,
 ): SheetsErrorClass {
   if (err instanceof GoogleLibError) return { kind: "fail", error: err };
+  if (err instanceof SheetsClientInitError) {
+    // Provably never sent: fail without retrying and without "maybe applied".
+    return {
+      kind: "fail",
+      error: new GoogleApiError(0, "client_init_failed", {
+        ...ids,
+        cause: err.cause,
+      }),
+    };
+  }
   const e = asErr(err);
   const status = readStatus(e);
-  const reason = readReason(e);
+  const reason = readSheetsReason(e);
   const code = readNetCode(e);
   const opts: GoogleErrorOptions = { ...ids, cause: err };
   const unknown = (): SheetsErrorClass => ({
@@ -94,6 +130,9 @@ function classify(
       error: new SpreadsheetNotFoundError(undefined, opts),
     };
   }
+  if (status === 403 && reason !== null && API_DISABLED_REASONS.has(reason)) {
+    return { kind: "fail", error: new GoogleApiError(403, reason, opts) };
+  }
   if (status === 403) {
     return {
       kind: "fail",
@@ -104,6 +143,18 @@ function classify(
     return {
       kind: "fail",
       error: new SheetTabNotFoundError(tabFromParseError(e), undefined, opts),
+    };
+  }
+  const noGrid = status === 400 ? NO_GRID.exec(readMessages(e)) : null;
+  if (noGrid) {
+    const id = noGrid[1]!; // digits only, so nothing to redact
+    return {
+      kind: "fail",
+      error: new SheetTabNotFoundError(
+        id,
+        `Sheet tab not found: sheetId ${id}`,
+        opts,
+      ),
     };
   }
   if (status !== null && status >= 500) {

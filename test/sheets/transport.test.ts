@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   get: vi.fn(),
@@ -31,7 +31,15 @@ vi.mock("@googleapis/sheets", () => ({
   },
 }));
 
-import { createSheetsApiTransport } from "../../src/sheets/transport.js";
+import {
+  GoogleApiError,
+  SheetsWriteOutcomeUnknownError,
+} from "../../src/core/errors.js";
+import { withSheetsRetry } from "../../src/sheets/retry.js";
+import {
+  SheetsClientInitError,
+  createSheetsApiTransport,
+} from "../../src/sheets/transport.js";
 
 const base = { accessToken: "tok", spreadsheetId: "sp1" };
 
@@ -186,23 +194,90 @@ describe("createSheetsApiTransport", () => {
     ).rejects.toBe(err);
   });
 
-  it("loads the peer via loadPeer and surfaces MissingPeerDependencyError naming it", async () => {
-    vi.resetModules();
-    const loadPeer = vi.fn(async (specifier: string) => {
-      const { MissingPeerDependencyError } =
-        await import("../../src/core/errors.js");
-      throw new MissingPeerDependencyError(specifier);
+  describe("with a mocked loadPeer", () => {
+    // Unmock even when an assertion fails, so the mock never leaks.
+    afterEach(() => {
+      vi.doUnmock("../../src/core/peer.js");
+      vi.resetModules();
     });
-    vi.doMock("../../src/core/peer.js", () => ({ loadPeer }));
-    const { createSheetsApiTransport: create } =
-      await import("../../src/sheets/transport.js");
-    await expect(
-      create().getSpreadsheet({ ...base, fields: "f" }),
-    ).rejects.toMatchObject({
-      name: "MissingPeerDependencyError",
-      message: expect.stringContaining("@googleapis/sheets"),
+
+    it("loads the peer via loadPeer and surfaces MissingPeerDependencyError naming it", async () => {
+      vi.resetModules();
+      const loadPeer = vi.fn(async (specifier: string) => {
+        const { MissingPeerDependencyError } =
+          await import("../../src/core/errors.js");
+        throw new MissingPeerDependencyError(specifier);
+      });
+      vi.doMock("../../src/core/peer.js", () => ({ loadPeer }));
+      const { createSheetsApiTransport: create } =
+        await import("../../src/sheets/transport.js");
+      await expect(
+        create().getSpreadsheet({ ...base, fields: "f" }),
+      ).rejects.toMatchObject({
+        name: "MissingPeerDependencyError",
+        message: expect.stringContaining("@googleapis/sheets"),
+      });
+      expect(loadPeer).toHaveBeenCalledWith("@googleapis/sheets");
     });
-    expect(loadPeer).toHaveBeenCalledWith("@googleapis/sheets");
-    vi.doUnmock("../../src/core/peer.js");
+  });
+
+  describe("client construction failure (nothing sent, I10)", () => {
+    const appendParams = {
+      ...base,
+      range: "'Log'!A1",
+      values: [["r"]],
+      valueInputOption: "RAW" as const,
+      insertDataOption: "INSERT_ROWS" as const,
+    };
+
+    it("is a SheetsClientInitError, not the raw error", async () => {
+      const raw = new Error("init failed for ya29.leaked-token");
+      h.sheets.mockImplementation(() => {
+        throw raw;
+      });
+      const err = await createSheetsApiTransport()
+        .valuesAppend(appendParams)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SheetsClientInitError);
+      expect(h.vAppend).not.toHaveBeenCalled();
+    });
+
+    it("append/batch fail once with GoogleApiError(0), not SheetsWriteOutcomeUnknownError", async () => {
+      h.sheets.mockImplementation(() => {
+        throw new Error("init failed for ya29.leaked-token");
+      });
+      const transport = createSheetsApiTransport();
+      const fn = vi.fn(() => transport.valuesAppend(appendParams));
+      const err = await withSheetsRetry(fn, {
+        idempotent: false,
+        ids: { tenantId: "t1", connectionId: "c1" },
+        sleep: async () => {},
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(GoogleApiError);
+      expect(err).not.toBeInstanceOf(SheetsWriteOutcomeUnknownError);
+      expect(err).toMatchObject({
+        status: 0,
+        reason: "client_init_failed",
+        tenantId: "t1",
+        connectionId: "c1",
+      });
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(h.vAppend).not.toHaveBeenCalled();
+      // I1: the raw error is kept only as a scrubbed cause.
+      const text = `${(err as Error).message} ${String((err as Error).cause)} ${(err as Error).stack ?? ""}`;
+      expect(text).not.toContain("ya29.leaked-token");
+    });
+
+    it("a failure from the API call itself is not wrapped (still ambiguous)", async () => {
+      h.vAppend.mockRejectedValue(
+        Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+      );
+      const transport = createSheetsApiTransport();
+      const err = await withSheetsRetry(
+        () => transport.valuesAppend(appendParams),
+        { idempotent: false, sleep: async () => {} },
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SheetsWriteOutcomeUnknownError);
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
+import { GoogleLibError } from "../core/errors.js";
 import { loadPeer } from "../core/peer.js";
 
 // Hand-rolled subsets of the Sheets v4 shapes the transport carries, so no
@@ -151,19 +152,38 @@ type SheetsModule = {
 };
 
 /**
+ * The Sheets client could not be built (peer failed to load or construct), so no
+ * request reached Google. Internal: the retry wrapper turns it into a sanitized
+ * `GoogleApiError(0, "client_init_failed")`, never `SheetsWriteOutcomeUnknownError`.
+ */
+export class SheetsClientInitError extends Error {
+  constructor(cause: unknown) {
+    super("Could not create the Google Sheets client", { cause });
+    this.name = "SheetsClientInitError";
+  }
+}
+
+/**
  * Talks to the Google Sheets API v4. Errors are thrown as-is (gaxios errors
  * carry the bearer token); the retry wrapper classifies them so only sanitized
  * GoogleLibError instances leave the library.
  */
 export function createSheetsApiTransport(): SheetsTransport {
   const client = async (accessToken: string): Promise<SheetsApi> => {
-    const mod = await loadPeer<
-      Partial<SheetsModule> & { default?: SheetsModule }
-    >("@googleapis/sheets");
-    const { sheets } = (mod.sheets ? mod : mod.default) as SheetsModule;
-    const auth = new OAuth2Client();
-    auth.setCredentials({ access_token: accessToken });
-    return sheets({ version: "v4", auth });
+    try {
+      const mod = await loadPeer<
+        Partial<SheetsModule> & { default?: SheetsModule }
+      >("@googleapis/sheets");
+      const { sheets } = (mod.sheets ? mod : mod.default) as SheetsModule;
+      const auth = new OAuth2Client();
+      auth.setCredentials({ access_token: accessToken });
+      return sheets({ version: "v4", auth });
+    } catch (err) {
+      // Nothing has been sent yet: mark it so a write is not reported as
+      // "maybe applied" (I10). MissingPeerDependencyError passes through.
+      if (err instanceof GoogleLibError) throw err;
+      throw new SheetsClientInitError(err);
+    }
   };
 
   return {

@@ -139,9 +139,33 @@ describe("batch atomicity and results", () => {
         req.freeze("Sheet1", { rows: 2 }),
         req.deleteTab({ sheetId: 99 }),
       ]),
-    ).rejects.toBeInstanceOf(GoogleApiError);
+    ).rejects.toBeInstanceOf(SheetTabNotFoundError);
     expect(fake.tab("Sheet1")!.frozenRows).toBe(0);
     expect(fake.appliedRequests).toEqual([]);
+  });
+
+  it("an unknown { sheetId } surfaces as SheetTabNotFoundError naming the id", async () => {
+    const { sheet, ops } = await setup({ tabs });
+    const err = await sheet
+      .batch([req.hideTab({ sheetId: 42 })])
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SheetTabNotFoundError);
+    expect(err).toMatchObject({
+      code: "sheet_tab_not_found",
+      tab: "42",
+      message: "Sheet tab not found: sheetId 42",
+      tenantId: "t1",
+    });
+    expect(ops("batchUpdate")).toHaveLength(1);
+  });
+
+  it("other batch 400s still surface as GoogleApiError(400)", async () => {
+    const { sheet } = await setup({ tabs });
+    const err = await sheet
+      .batch([req.deleteTab({ sheetId: 0 }), req.deleteTab({ sheetId: 5 })])
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GoogleApiError);
+    expect(err).toMatchObject({ status: 400 });
   });
 
   it("returns one reply per request", async () => {

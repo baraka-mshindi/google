@@ -110,6 +110,94 @@ describe("classifySheetsError", () => {
   );
 
   describe.each(BOTH)(
+    "403 API not enabled → GoogleApiError(403, reason), not access denied (idempotent=%s)",
+    (idem) => {
+      const disabled = (
+        error: Record<string, unknown>,
+      ): Error & { response: unknown } =>
+        Object.assign(new Error("Request failed with status code 403"), {
+          response: { status: 403, headers: {}, data: { error } },
+        });
+      it.each([
+        [
+          "accessNotConfigured in errors[]",
+          disabled({
+            code: 403,
+            message:
+              "Google Sheets API has not been used in project 1 before or it is disabled.",
+            errors: [{ domain: "usageLimits", reason: "accessNotConfigured" }],
+            status: "PERMISSION_DENIED",
+          }),
+          "accessNotConfigured",
+        ],
+        [
+          "SERVICE_DISABLED only in details[] (google.rpc.ErrorInfo)",
+          disabled({
+            code: 403,
+            message:
+              "Google Sheets API has not been used in project 1 before or it is disabled.",
+            status: "PERMISSION_DENIED",
+            details: [
+              {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                reason: "SERVICE_DISABLED",
+                domain: "googleapis.com",
+              },
+            ],
+          }),
+          "SERVICE_DISABLED",
+        ],
+        [
+          "both: errors[] reason wins",
+          disabled({
+            code: 403,
+            errors: [{ reason: "accessNotConfigured" }],
+            details: [{ reason: "SERVICE_DISABLED" }],
+          }),
+          "accessNotConfigured",
+        ],
+      ])("%s", (_n, err, reason) => {
+        const e = failOf(err, idem);
+        expect(e).not.toBeInstanceOf(SpreadsheetAccessDeniedError);
+        expect(e).toBeInstanceOf(GoogleApiError);
+        expect((e as GoogleApiError).status).toBe(403);
+        expect((e as GoogleApiError).reason).toBe(reason);
+      });
+    },
+  );
+
+  describe.each(BOTH)(
+    "400 No grid with id → SheetTabNotFoundError(sheetId) (idempotent=%s)",
+    (idem) => {
+      it.each([
+        [
+          "Google's batch wording",
+          "Invalid requests[1].deleteSheet: No grid with id: 99",
+          "99",
+        ],
+        ["bare", "No grid with id: 0", "0"],
+      ])("%s", (_n, message, tab) => {
+        const e = failOf(http(400, "badRequest", { message }), idem);
+        expect(e).toBeInstanceOf(SheetTabNotFoundError);
+        expect((e as SheetTabNotFoundError).tab).toBe(tab);
+        expect(e.message).toBe(`Sheet tab not found: sheetId ${tab}`);
+      });
+
+      it("other 'No … with id' messages stay GoogleApiError(400)", () => {
+        const e = failOf(
+          http(400, "badRequest", {
+            message:
+              "Invalid requests[0].deleteNamedRange: No named range with id: abc",
+          }),
+          idem,
+        );
+        expect(e).toBeInstanceOf(GoogleApiError);
+        expect((e as GoogleApiError).status).toBe(400);
+      });
+    },
+  );
+
+  describe.each(BOTH)(
     "400 Unable to parse range → SheetTabNotFoundError (idempotent=%s)",
     (idem) => {
       it.each([
