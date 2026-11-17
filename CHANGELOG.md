@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/baraka-mshindi/google/compare/google-v1.3.0...google-v1.3.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* send the access token with Calendar and Sheets requests ([65738b9](https://github.com/baraka-mshindi/google/commit/65738b937cf056a0ef47c0469032787763f0276a))
+* send the access token with Calendar and Sheets requests ([922ed37](https://github.com/baraka-mshindi/google/commit/922ed37bc4003fb1961cbf9ddc0d713edbcb0217))
+
 ## [1.3.0](https://github.com/baraka-mshindi/google/compare/google-v1.2.1...google-v1.3.0) (2026-11-17)
 
 
