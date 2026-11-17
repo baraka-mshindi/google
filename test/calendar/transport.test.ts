@@ -8,7 +8,9 @@ const h = vi.hoisted(() => ({
   query: vi.fn(),
   calendar: vi.fn(),
 }));
-vi.mock("@googleapis/calendar", () => ({
+vi.mock("@googleapis/calendar", async (importOriginal) => ({
+  // The real auth, so the client is built as in production.
+  auth: (await importOriginal<typeof import("@googleapis/calendar")>()).auth,
   calendar: (...a: unknown[]) => {
     h.calendar(...a);
     return {

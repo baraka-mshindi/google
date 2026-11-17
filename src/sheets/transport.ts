@@ -1,6 +1,6 @@
-import { OAuth2Client } from "google-auth-library";
 import { GoogleLibError } from "../core/errors.js";
 import { loadPeer } from "../core/peer.js";
+import { type PeerAuthModule, peerAuthClient } from "../core/peer-auth.js";
 
 // Hand-rolled subsets of the Sheets v4 shapes the transport carries, so no
 // declaration outside /sheets imports the optional `@googleapis/sheets` peer
@@ -174,9 +174,10 @@ export function createSheetsApiTransport(): SheetsTransport {
       const mod = await loadPeer<
         Partial<SheetsModule> & { default?: SheetsModule }
       >("@googleapis/sheets");
-      const { sheets } = (mod.sheets ? mod : mod.default) as SheetsModule;
-      const auth = new OAuth2Client();
-      auth.setCredentials({ access_token: accessToken });
+      const peer = (mod.sheets ? mod : mod.default) as SheetsModule &
+        PeerAuthModule;
+      const { sheets } = peer;
+      const auth = peerAuthClient(peer, accessToken);
       return sheets({ version: "v4", auth });
     } catch (err) {
       // Nothing has been sent yet: mark it so a write is not reported as

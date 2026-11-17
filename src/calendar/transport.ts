@@ -1,5 +1,5 @@
-import { OAuth2Client } from "google-auth-library";
 import { loadPeer } from "../core/peer.js";
+import { type PeerAuthModule, peerAuthClient } from "../core/peer-auth.js";
 
 export type GEvent = {
   id: string;
@@ -119,9 +119,10 @@ export function createCalendarApiTransport(): CalendarTransport {
     const mod = await loadPeer<
       Partial<CalendarModule> & { default?: CalendarModule }
     >("@googleapis/calendar");
-    const { calendar } = (mod.calendar ? mod : mod.default) as CalendarModule;
-    const auth = new OAuth2Client();
-    auth.setCredentials({ access_token: accessToken });
+    const peer = (mod.calendar ? mod : mod.default) as CalendarModule &
+      PeerAuthModule;
+    const { calendar } = peer;
+    const auth = peerAuthClient(peer, accessToken);
     return calendar({ version: "v3", auth });
   };
 

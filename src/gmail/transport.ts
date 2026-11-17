@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
-import { OAuth2Client } from "google-auth-library";
 import { SendOutcomeUnknownError } from "../core/errors.js";
 import { loadPeer } from "../core/peer.js";
+import { type PeerAuthModule, peerAuthClient } from "../core/peer-auth.js";
 
 /** Raw messages above this size go through the media upload endpoint. */
 export const UPLOAD_THRESHOLD_BYTES = 5_242_880;
@@ -37,9 +37,10 @@ export function createGmailApiTransport(): GmailTransport {
       const mod = await loadPeer<
         Partial<GmailModule> & { default?: GmailModule }
       >("@googleapis/gmail");
-      const { gmail } = (mod.gmail ? mod : mod.default) as GmailModule;
-      const auth = new OAuth2Client();
-      auth.setCredentials({ access_token: accessToken });
+      const peer = (mod.gmail ? mod : mod.default) as GmailModule &
+        PeerAuthModule;
+      const { gmail } = peer;
+      const auth = peerAuthClient(peer, accessToken);
       const api = gmail({ version: "v1", auth });
       const thread = threadId === null ? {} : { threadId };
       const { data } =

@@ -2,7 +2,9 @@ import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ send: vi.fn(), gmail: vi.fn() }));
-vi.mock("@googleapis/gmail", () => ({
+vi.mock("@googleapis/gmail", async (importOriginal) => ({
+  // The real auth, so the client is built as in production.
+  auth: (await importOriginal<typeof import("@googleapis/gmail")>()).auth,
   gmail: (...a: unknown[]) => {
     h.gmail(...a);
     return { users: { messages: { send: h.send } } };
