@@ -8,6 +8,7 @@ export const SERVICE_SCOPES = {
     "https://www.googleapis.com/auth/calendar.events.owned",
     "https://www.googleapis.com/auth/calendar.events.freebusy",
   ],
+  sheets: ["https://www.googleapis.com/auth/spreadsheets"],
 } as const;
 
 export type GoogleService = keyof typeof SERVICE_SCOPES;

@@ -3,7 +3,6 @@ import type { GoogleCore } from "../core/create-google.js";
 import { internals } from "../core/create-google.js";
 import {
   ConferencingUnavailableError,
-  ConnectionRevokedError,
   EventCancelledError,
   EventConflictError,
   EventNotFoundError,
@@ -12,8 +11,9 @@ import {
   InvalidEventError,
 } from "../core/errors.js";
 import { asErr, readStatus } from "../core/google-http.js";
-import { assertServiceScopes } from "../core/scopes.js";
+import { defaultSleep } from "../core/retry-loop.js";
 import type { ConnectionView } from "../core/types.js";
+import { withConnectionToken } from "../core/with-token.js";
 import { deriveEventId, fingerprint } from "./ids.js";
 import {
   CalendarUnauthorizedSignal,
@@ -84,9 +84,6 @@ const PATCH_ATTEMPTS = 3;
 const MAX_EVENT_MS = 24 * 3_600_000;
 const BACKOFF_BASE_MS = 250;
 const BACKOFF_CAP_MS = 8000;
-
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 const conferenceStatus = (e: GEvent): string | undefined =>
   e.conferenceData?.createRequest?.status?.statusCode;
@@ -380,59 +377,21 @@ export function createCalendar(
       maxAttempts: 1,
     });
 
-  async function withToken<T>(
+  function withToken<T>(
     tenantId: string,
     connectionId: string,
     fn: (accessToken: string, connection: ConnectionView) => Promise<T>,
   ): Promise<T> {
-    const { store, tokens, emit, now, logger } = google[internals];
-    const first = await tokens.getAccessToken(tenantId, connectionId);
-    const { refreshToken: _omit, ...view } = first.connection;
-    void _omit;
-    assertServiceScopes(view.scopes, ["calendar"], { tenantId, connectionId });
-
-    let result: T;
-    try {
-      result = await fn(first.accessToken, view);
-    } catch (err) {
-      if (!(err instanceof CalendarUnauthorizedSignal)) throw err;
-      const fresh = await tokens.getAccessToken(tenantId, connectionId, {
-        forceRefresh: true,
-      });
-      try {
-        result = await fn(fresh.accessToken, view);
-      } catch (err2) {
-        if (!(err2 instanceof CalendarUnauthorizedSignal)) throw err2;
-        await store.updateConnectionStatus(
-          tenantId,
-          connectionId,
-          "revoked",
-          "unauthorized",
-        );
-        tokens.evict(connectionId);
-        await emit({
-          type: "connection.revoked",
-          tenantId,
-          connectionId,
-          reason: "unauthorized",
-          at: now(),
-        });
-        throw new ConnectionRevokedError("unauthorized", {
-          tenantId,
-          connectionId,
-        });
-      }
-    }
-    try {
-      await store.touchConnection(tenantId, connectionId, now());
-    } catch {
-      try {
-        logger?.warn("google touchConnection failed");
-      } catch {
-        // logging must never break the caller
-      }
-    }
-    return result;
+    return withConnectionToken(
+      google,
+      {
+        tenantId,
+        connectionId,
+        service: "calendar",
+        isUnauthorized: (e) => e instanceof CalendarUnauthorizedSignal,
+      },
+      fn,
+    );
   }
 
   const warn = (message: string): void => {

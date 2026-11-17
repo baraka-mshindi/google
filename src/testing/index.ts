@@ -4,3 +4,4 @@ export * from "./in-memory-store.js";
 export * from "./fake-google-oauth.js";
 export * from "./capture-transport.js";
 export * from "./fake-calendar.js";
+export * from "./fake-sheets.js";

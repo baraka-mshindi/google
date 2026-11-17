@@ -247,3 +247,51 @@ export class ConferencingUnavailableError extends GoogleLibError {
     super("conferencing_unavailable", message, opts);
   }
 }
+
+export class SpreadsheetNotFoundError extends GoogleLibError {
+  constructor(message = "Spreadsheet not found", opts?: GoogleErrorOptions) {
+    super("spreadsheet_not_found", message, opts);
+  }
+}
+
+export class SpreadsheetAccessDeniedError extends GoogleLibError {
+  constructor(
+    message = "Access to the spreadsheet was denied",
+    opts?: GoogleErrorOptions,
+  ) {
+    super("spreadsheet_access_denied", message, opts);
+  }
+}
+
+export class SheetTabNotFoundError extends GoogleLibError {
+  readonly tab: string;
+  constructor(tab: string, message?: string, opts?: GoogleErrorOptions) {
+    super(
+      "sheet_tab_not_found",
+      message ?? `Sheet tab not found: ${JSON.stringify(tab).slice(0, 104)}`,
+      opts,
+    );
+    this.tab = tab;
+  }
+}
+
+export class InvalidSheetsInputError extends GoogleLibError {
+  readonly field: string;
+  constructor(field: string, message?: string, opts?: GoogleErrorOptions) {
+    super(
+      "invalid_sheets_input",
+      message ?? `Invalid Sheets input: ${JSON.stringify(field).slice(0, 64)}`,
+      opts,
+    );
+    this.field = field;
+  }
+}
+
+export class SheetsWriteOutcomeUnknownError extends GoogleLibError {
+  constructor(
+    message = "Sheets write outcome is unknown; it may or may not have been applied",
+    opts?: GoogleErrorOptions,
+  ) {
+    super("sheets_write_outcome_unknown", message, opts);
+  }
+}

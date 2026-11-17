@@ -2,7 +2,6 @@ import {
   ConferencingUnavailableError,
   GoogleApiError,
   GoogleLibError,
-  RateLimitedError,
 } from "../core/errors.js";
 import {
   asErr,
@@ -12,7 +11,8 @@ import {
   readRetryAfterMs,
   readStatus,
 } from "../core/google-http.js";
-import type { RetryOptions } from "../gmail/retry.js";
+import { RATE_REASONS, runWithRetry } from "../core/retry-loop.js";
+import type { RetryOptions } from "../core/retry-loop.js";
 
 export type { RetryOptions };
 
@@ -64,7 +64,6 @@ const NETWORK_CODES = new Set([
   "ETIMEDOUT",
   "ESOCKETTIMEDOUT",
 ]);
-const RATE_REASONS = new Set(["rateLimitExceeded", "userRateLimitExceeded"]);
 
 export function classifyCalendarError(err: unknown): CalendarErrorClass {
   if (err instanceof GoogleLibError) return { kind: "fail", error: err };
@@ -111,52 +110,34 @@ export function classifyCalendarError(err: unknown): CalendarErrorClass {
   return { kind: "fail", error: new GoogleApiError(0, code, opts) };
 }
 
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Runs `fn`, retrying rate limits, 5xx and network failures. Unlike Gmail's send
  * (I7), this deliberately retries ambiguous failures: callers only wrap idempotent
  * calls. 401/409/404/410/412 surface as internal signals; everything else as sanitized
  * `GoogleLibError`s.
  */
-export async function withCalendarRetry<T>(
+export function withCalendarRetry<T>(
   fn: () => Promise<T>,
   opts: RetryOptions = {},
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? 3;
-  const baseMs = opts.baseMs ?? 250;
-  const capMs = opts.capMs ?? 8000;
-  const sleep = opts.sleep ?? defaultSleep;
-  const random = opts.random ?? Math.random;
-
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
+  return runWithRetry(fn, {
+    ...opts,
+    classify: (err) => {
       const c = classifyCalendarError(err);
-      if (c.kind === "fail") throw c.error;
-      if (c.kind === "unauthorized") throw new CalendarUnauthorizedSignal();
-      if (c.kind === "duplicate") throw new DuplicateEventSignal();
-      if (c.kind === "gone") throw new EventGoneSignal();
-      if (c.kind === "precondition") throw new PreconditionFailedSignal();
-      if (c.delayMs !== null && c.delayMs > capMs) {
-        throw new RateLimitedError(c.delayMs, { cause: err });
+      switch (c.kind) {
+        case "retry":
+          return c;
+        case "fail":
+          return { kind: "throw", error: c.error };
+        case "unauthorized":
+          return { kind: "throw", error: new CalendarUnauthorizedSignal() };
+        case "duplicate":
+          return { kind: "throw", error: new DuplicateEventSignal() };
+        case "gone":
+          return { kind: "throw", error: new EventGoneSignal() };
+        case "precondition":
+          return { kind: "throw", error: new PreconditionFailedSignal() };
       }
-      if (attempt + 1 >= maxAttempts) {
-        const e = asErr(err);
-        const status = readStatus(e);
-        if (status === 429 || status === 403) {
-          throw new RateLimitedError(c.delayMs, { cause: err });
-        }
-        if (status !== null) {
-          throw new GoogleApiError(status, readReason(e), { cause: err });
-        }
-        throw new GoogleApiError(0, readNetCode(e), { cause: err });
-      }
-      await sleep(
-        c.delayMs ?? random() * Math.min(capMs, baseMs * 2 ** attempt),
-      );
-    }
-  }
+    },
+  });
 }
