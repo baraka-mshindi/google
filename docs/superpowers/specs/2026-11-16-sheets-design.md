@@ -164,7 +164,8 @@ count)`, `deleteColumns`, `setColumnWidth(tab, columns, px)`,
 - Cells: `merge(tab, a1, type?)`, `unmerge(tab, a1)`, `format(tab, a1, cellFormat,
 fields?)`, `copyPaste(from, to, pasteType?)`, `sort(tab, a1, specs)`.
 - Filters and names: `setBasicFilter(tab, a1)`, `clearBasicFilter(tab)`,
-  `addNamedRange(name, tab, a1)`, `deleteNamedRange(nameOrId)`,
+  `addNamedRange(name, tab, a1)`, `deleteNamedRange(namedRangeId)` (the id from
+  `getInfo().namedRanges`; Google deletes by id only),
   `protect(tab, { a1?, description?, warningOnly?, editors? })`,
   `unprotect(protectedRangeId)`.
 - Escape hatch: `req.raw(request: sheets_v4.Schema$Request)` passes a Google request
@@ -176,15 +177,28 @@ API's 0-based half-open grid ranges. Columns accept a letter range (`"B:D"`) or 
 numbers.
 
 A tab added in a batch can be referenced by title later in the same batch: if
-`addTab` has no `sheetId`, the library assigns one that is unused in the spreadsheet
-before sending. (Builder: confirm Google accepts a caller-chosen id; the
-`AddSheetRequest` properties allow it.)
+`addTab` has no `sheetId` and its title is referenced later in the batch, the library
+assigns max(existing ids, in-batch ids) + 1 from the one tab lookup before sending
+(ruling R5); a lone id-less `addTab` lets Google assign the id, returned in the reply.
+Only `addTab` titles resolve in-batch: a title produced by `renameTab` or
+`duplicateTab` earlier in the same batch does not, and fails closed with
+`SheetTabNotFoundError` before anything is sent.
+
+`moveTab(tab, index)` passes `index` through as Google's `SheetProperties.index`,
+which counts positions **before** the move (ruling R4): moving a tab right needs the
+target position + 1 (`[A, B, C]`, `moveTab("A", 2)` → `[B, A, C]`).
+
+`addNamedRange` rejects names Google refuses because they read as a reference: an A1
+cell (`A1`), an R1C1 ref (`R1C1`, `RC`) or `TRUE`/`FALSE` (`InvalidSheetsInputError("name")`).
 
 ### 5.4 A1 utilities (exported)
 
 `a1.quoteTab(title)`, `a1.range(tab, range?)`, `a1.columnToIndex("AA") → 27`,
 `a1.indexToColumn(27) → "AA"`, `a1.parse("B2:D")` → 1-based bounds. Used internally
-and handy for hosts building ranges.
+and handy for hosts building ranges. `a1.parse` accepts a single cell, column or row,
+and pairs that are cell:cell, column:column, row:row or cell:column (`A2:C`); other
+mixed pairs (`2:A`, `A1:5`) throw `InvalidSheetsInputError("range")`, since Google
+would answer "Unable to parse range" and that reads as a missing tab.
 
 ## 6. Transport, tokens and retries
 
@@ -229,10 +243,22 @@ New `GoogleLibError` subclasses (exported from `/core`, like Calendar's):
 | Class                            | `code`                         | When                                                                                                                                             |
 | -------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `SpreadsheetNotFoundError`       | `spreadsheet_not_found`        | 404 on the spreadsheet id.                                                                                                                       |
-| `SpreadsheetAccessDeniedError`   | `spreadsheet_access_denied`    | 403 that is not a rate limit (the account cannot open/edit it).                                                                                  |
+| `SpreadsheetAccessDeniedError`   | `spreadsheet_access_denied`    | 403 that is not a rate limit and not "API not enabled" (the account cannot open/edit it).                                                        |
 | `SheetTabNotFoundError`          | `sheet_tab_not_found`          | A tab title or `sheetId` is not in the spreadsheet (checked locally when resolving, or from Google's "Unable to parse range" for a missing tab). |
 | `InvalidSheetsInputError`        | `invalid_sheets_input`         | Bad ids, ranges, values, builder args — thrown before any token fetch. Carries `field`.                                                          |
 | `SheetsWriteOutcomeUnknownError` | `sheets_write_outcome_unknown` | I10 ambiguous failure on `append`/`batch`.                                                                                                       |
+
+Carve-outs (ruling R7 and the review fixes):
+
+- A 403 whose reason is `accessNotConfigured` or `SERVICE_DISABLED` (the Sheets API is
+  not enabled for the OAuth client's Google Cloud project; the reason may sit in
+  `errors[]` or in `details[]`) is `GoogleApiError(403, reason)`, not
+  `SpreadsheetAccessDeniedError`: the fix is enabling the API, not sharing the file.
+- A `batch()` 400 "No grid with id: N" (a `{ sheetId }` that is not in the
+  spreadsheet) is `SheetTabNotFoundError` with `tab` = `"N"`.
+- When the Sheets client cannot even be built (the peer fails to load or construct),
+  nothing was sent: that is `GoogleApiError(0, "client_init_failed")` for every
+  method, never `SheetsWriteOutcomeUnknownError`.
 
 Other 400s surface as `GoogleApiError(400, reason)`; rate limits as `RateLimitedError`.
 

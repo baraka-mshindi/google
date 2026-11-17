@@ -246,7 +246,9 @@ const { range, firstRow, lastRow } = await sheet.append("Applicants", [
 
 `append` adds rows after the last row of the table that starts in column A and returns
 where they landed. With `{ insert: "insert_rows" }` (the default) it inserts new rows;
-`"overwrite"` writes into the empty rows below the table.
+`"overwrite"` writes into the empty rows below the table. `range` is Google's
+`updatedRange`; `firstRow` and `lastRow` are its 1-based rows, or `0` if that range
+cannot be parsed (the rows were still written, so `append` does not throw).
 
 An append is **not idempotent**: sending it twice adds the rows twice. So `append` and `batch` are retried only when Google answered 429 / rate-limit 403, or the failure provably happened before the request reached Google (`ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `ERR_TLS_*`, `CERT_*`); any other ambiguous failure throws `SheetsWriteOutcomeUnknownError` after exactly one Google call. The library never
 guesses whether the rows landed. You decide, after looking:
@@ -320,7 +322,24 @@ req.deleteColumns("Q1 2026", 3, 1); // delete column C
 ```
 
 - **A tab added in the batch can be used later in the same batch** by its title, as
-  `"Q1 2026"` is above. If `addTab` has no `sheetId`, the library picks an unused one.
+  `"Q1 2026"` is above. When an id-less `addTab`'s title is referenced later in the
+  batch, the library gives the new tab one id above every existing and in-batch id
+  (from the one tab lookup). A lone id-less `addTab` lets Google pick the id, which
+  comes back in the reply.
+- **Only `addTab` titles resolve in-batch.** A title produced by `renameTab` or
+  `duplicateTab` earlier in the same batch does not: the batch fails with
+  `SheetTabNotFoundError` before anything is sent. Use the old title or `{ sheetId }`,
+  or send a second batch.
+- **`moveTab` indexes count positions before the move**, as Google does. Moving a tab
+  left, `index` is its new position; moving it right, use the new position + 1:
+
+```ts
+// Tabs are [A, B, C].
+req.moveTab("A", 2); // → [B, A, C] (not [B, C, A])
+req.moveTab("A", 3); // → [B, C, A]
+req.moveTab("C", 0); // → [C, A, B]
+```
+
 - Tabs are resolved by title with **at most one** metadata read per batch, and none when
   every reference is `{ sheetId }`.
 - The result has one reply per request, in order. For `addTab`, the reply carries the
@@ -334,8 +353,11 @@ Builders: `addTab`, `deleteTab`, `renameTab`, `duplicateTab`, `moveTab`, `hideTa
 `showTab`, `insertRows`, `insertColumns`, `deleteRows`, `deleteColumns`,
 `setColumnWidth`, `setRowHeight`, `autoResizeColumns`, `freeze`, `merge`, `unmerge`,
 `format`, `copyPaste`, `sort`, `setBasicFilter`, `clearBasicFilter`, `addNamedRange`,
-`deleteNamedRange`, `protect`, `unprotect`. For anything else (charts, conditional
-formats, data validation) pass a Google request straight through:
+`deleteNamedRange`, `protect`, `unprotect`. `deleteNamedRange` takes the range's
+`namedRangeId` from `getInfo().namedRanges`, not its name. `addNamedRange` rejects
+names that read as a cell (`A1`, `R1C1`) or `TRUE`/`FALSE`, as Google does. For
+anything else (charts, conditional formats, data validation) pass a Google request
+straight through:
 
 ```ts
 await sheet.batch([
@@ -362,19 +384,25 @@ applies. If it throws `SheetsWriteOutcomeUnknownError`, read the spreadsheet wit
 All errors extend `GoogleLibError` and carry a stable `code`. Nothing returns
 `{ success, problem }`, and no error contains a token.
 
-| Code                           | Class                            | Meaning                                                                          |
-| ------------------------------ | -------------------------------- | -------------------------------------------------------------------------------- |
-| `spreadsheet_not_found`        | `SpreadsheetNotFoundError`       | 404 on the spreadsheet id                                                        |
-| `spreadsheet_access_denied`    | `SpreadsheetAccessDeniedError`   | 403 that is not a rate limit; the account cannot open or edit it                 |
-| `sheet_tab_not_found`          | `SheetTabNotFoundError`          | A tab title or `sheetId` is not in the spreadsheet                               |
-| `invalid_sheets_input`         | `InvalidSheetsInputError`        | Bad id, range, value or builder argument; `field` names it. Thrown before Google |
-| `sheets_write_outcome_unknown` | `SheetsWriteOutcomeUnknownError` | `append` or `batch` failed ambiguously; check before retrying                    |
-| `missing_scope`                | `MissingScopeError`              | The connection has no Sheets scope                                               |
-| `connection_revoked`           | `ConnectionRevokedError`         | Google rejected the token twice; the connection is marked revoked                |
-| `rate_limited`                 | `RateLimitedError`               | Still rate limited after the retries                                             |
+| Code                           | Class                            | Meaning                                                                            |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------- |
+| `spreadsheet_not_found`        | `SpreadsheetNotFoundError`       | 404 on the spreadsheet id                                                          |
+| `spreadsheet_access_denied`    | `SpreadsheetAccessDeniedError`   | 403 that is not a rate limit or a disabled API; the account cannot open or edit it |
+| `sheet_tab_not_found`          | `SheetTabNotFoundError`          | A tab title or `sheetId` is not in the spreadsheet                                 |
+| `invalid_sheets_input`         | `InvalidSheetsInputError`        | Bad id, range, value or builder argument; `field` names it. Thrown before Google   |
+| `sheets_write_outcome_unknown` | `SheetsWriteOutcomeUnknownError` | `append` or `batch` failed ambiguously; check before retrying                      |
+| `missing_scope`                | `MissingScopeError`              | The connection has no Sheets scope                                                 |
+| `connection_revoked`           | `ConnectionRevokedError`         | Google rejected the token twice; the connection is marked revoked                  |
+| `rate_limited`                 | `RateLimitedError`               | Still rate limited after the retries                                               |
 
-Other 400s surface as `GoogleApiError` with status 400 and Google's reason. No new
-audit events are emitted for Sheets data calls; `connection.revoked` still fires.
+Other 400s surface as `GoogleApiError` with status 400 and Google's reason. One 403 is
+not about sharing: when the Sheets API is not enabled for your OAuth client's Google
+Cloud project, Google answers 403 `accessNotConfigured` or `SERVICE_DISABLED`, and you
+get `GoogleApiError` with status 403 and that reason. Enable the Google Sheets
+API in that project; sharing the spreadsheet will not help. A `batch()` that names a
+`{ sheetId }` the spreadsheet does not have throws `SheetTabNotFoundError` with `tab`
+set to the id. No new audit events are emitted for Sheets data calls;
+`connection.revoked` still fires.
 
 ## 8. Testing your integration
 
@@ -419,6 +447,26 @@ fake.failNext(
 // and the row is in fake.values("Applicants").
 ```
 
+To make Google answer with an HTTP error, build one with `sheetsHttpError(status,
+reason, message)` from the same entry point. It has the shape the googleapis client
+throws, so the library classifies it as it would a real answer:
+
+```ts
+import { sheetsHttpError } from "@mshindi-labs/google/testing";
+
+fake.failNext(
+  "valuesGet",
+  sheetsHttpError(403, "forbidden", "The caller does not have permission"),
+);
+// the next read throws SpreadsheetAccessDeniedError
+
+fake.failNext(
+  "batchUpdate",
+  sheetsHttpError(429, "rateLimitExceeded", "Quota exceeded"),
+);
+// the next sheet.batch(...) is retried and applied once
+```
+
 `FakeSheets` models how Google parses `RAW` and `USER_ENTERED`, and records purely
 visual requests (widths, formats, merges, filters, sort) without rendering them.
 
@@ -426,9 +474,10 @@ visual requests (widths, formats, merges, filters, sort) without rendering them.
 
 The fake only models what we know about Google's parsing. Before you rely on "plain
 strings stay literal" in production, run this once with a real connection against a
-throwaway spreadsheet. It writes tricky strings next to a formula cell, reads them back
-and prints anything that did not come back unchanged. It is opt-in: nothing in the
-library runs it.
+throwaway spreadsheet. It writes tricky strings twice: next to a formula cell (the
+library then sends `USER_ENTERED` and prefixes plain strings with `'`) and on their own
+(the default `RAW` path). It reads both back and prints anything that did not come back
+unchanged. It is opt-in: nothing in the library runs it.
 
 ```ts
 import { createSheets } from "@mshindi-labs/google/sheets";
@@ -453,15 +502,17 @@ export async function verifyRoundTrip(
     "007",
   ];
 
-  // One row: the formula first, then every string next to it.
+  // Row 1: the formula first, then every string next to it (USER_ENTERED + ').
   await sheet.update({ tab, range: "A1" }, [[{ formula: "=1+1" }, ...matrix]]);
+  // Row 2: the same strings with no formula (the default RAW path).
+  await sheet.update({ tab, range: "B2" }, [matrix]);
 
   const [formulaRow] = await sheet.getValues(
     { tab, range: "A1" },
     { valueRender: "formula" },
   );
-  const [row] = await sheet.getValues(
-    { tab, range: "B1:K1" },
+  const [withFormula, raw] = await sheet.getValues(
+    { tab, range: "B1:K2" },
     { valueRender: "unformatted" },
   );
 
@@ -470,15 +521,18 @@ export async function verifyRoundTrip(
     bad++;
     console.log("formula cell was not stored as a formula:", formulaRow?.[0]);
   }
-  matrix.forEach((expected, i) => {
-    const got = row?.[i] ?? ""; // Google drops trailing empty cells
-    if (got !== expected) {
-      bad++;
-      console.log(
-        `changed: wrote ${JSON.stringify(expected)}, read ${JSON.stringify(got)}`,
-      );
-    }
-  });
+  const check = (label: string, row: unknown[] | undefined) =>
+    matrix.forEach((expected, i) => {
+      const got = row?.[i] ?? ""; // Google drops trailing empty cells
+      if (got !== expected) {
+        bad++;
+        console.log(
+          `${label}: wrote ${JSON.stringify(expected)}, read ${JSON.stringify(got)}`,
+        );
+      }
+    });
+  check("next to a formula", withFormula);
+  check("raw", raw);
 
   console.log(
     bad === 0 ? "All values round-tripped." : `${bad} value(s) changed.`,

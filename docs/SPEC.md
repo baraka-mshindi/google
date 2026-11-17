@@ -64,7 +64,7 @@ semantic-release, commitlint, prettier).
 ├── /core       createGoogle, OAuth flow, crypto, store + key-provider interfaces, errors, events
 ├── /gmail      createGmail(google) → send()
 ├── /postgres   createPostgresStore(query), migrations
-├── /testing    InMemoryStore, LocalKeyProvider, CaptureTransport
+├── /testing    InMemoryStore, LocalKeyProvider, CaptureTransport, FakeCalendar, FakeSheets, sheetsHttpError
 ├── /calendar   createCalendar(google) → availability, suggestSlots, create/update/cancel/getEvent
 └── /sheets     createSheets(google) → open() → values, rows, append, batch
 ```
@@ -736,6 +736,9 @@ redacted before attaching.
 - `runStoreContractTests(makeStore)`.
 - `FakeGoogleOAuth` — local stand-in for the token, revoke, and certificate endpoints
   for end-to-end flow tests.
+- `FakeCalendar` and `FakeSheets` — in-memory `CalendarTransport` and `SheetsTransport`
+  (see the Calendar and Sheets guides); `sheetsHttpError(status, reason, message)`
+  builds a Google-shaped HTTP error for `FakeSheets.failNext`.
 
 ### Required library test coverage
 

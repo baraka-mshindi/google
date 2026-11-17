@@ -7,7 +7,7 @@ import type { GoogleCore } from "../../src/core/create-google.js";
 import { SheetsWriteOutcomeUnknownError } from "../../src/core/errors.js";
 import { a1, createSheets, req } from "../../src/sheets/index.js";
 import type { RangeRef, SpreadsheetHandle } from "../../src/sheets/index.js";
-import { FakeSheets } from "../../src/testing/index.js";
+import { FakeSheets, sheetsHttpError } from "../../src/testing/index.js";
 
 declare const google: GoogleCore;
 declare const tenantId: string;
@@ -162,6 +162,11 @@ export async function batch() {
   req.insertColumns("Q1 2026", "C", 2); // two columns before column C (or 3)
   req.deleteColumns("Q1 2026", 3, 1); // delete column C
 
+  // Tabs are [A, B, C].
+  req.moveTab("A", 2); // → [B, A, C] (not [B, C, A])
+  req.moveTab("A", 3); // → [B, C, A]
+  req.moveTab("C", 0); // → [C, A, B]
+
   const newSheetId = replies[0]?.addSheet?.properties?.sheetId;
 
   await sheet.batch([
@@ -209,6 +214,18 @@ export async function testing() {
       afterApply: true,
     },
   );
+
+  fake.failNext(
+    "valuesGet",
+    sheetsHttpError(403, "forbidden", "The caller does not have permission"),
+  );
+  // the next read throws SpreadsheetAccessDeniedError
+
+  fake.failNext(
+    "batchUpdate",
+    sheetsHttpError(429, "rateLimitExceeded", "Quota exceeded"),
+  );
+  // the next sheet.batch(...) is retried and applied once
 }
 
 // §9 Verify against a real sheet
@@ -232,15 +249,17 @@ export async function verifyRoundTrip(
     "007",
   ];
 
-  // One row: the formula first, then every string next to it.
+  // Row 1: the formula first, then every string next to it (USER_ENTERED + ').
   await sheet.update({ tab, range: "A1" }, [[{ formula: "=1+1" }, ...matrix]]);
+  // Row 2: the same strings with no formula (the default RAW path).
+  await sheet.update({ tab, range: "B2" }, [matrix]);
 
   const [formulaRow] = await sheet.getValues(
     { tab, range: "A1" },
     { valueRender: "formula" },
   );
-  const [row] = await sheet.getValues(
-    { tab, range: "B1:K1" },
+  const [withFormula, raw] = await sheet.getValues(
+    { tab, range: "B1:K2" },
     { valueRender: "unformatted" },
   );
 
@@ -249,15 +268,18 @@ export async function verifyRoundTrip(
     bad++;
     console.log("formula cell was not stored as a formula:", formulaRow?.[0]);
   }
-  matrix.forEach((expected, i) => {
-    const got = row?.[i] ?? ""; // Google drops trailing empty cells
-    if (got !== expected) {
-      bad++;
-      console.log(
-        `changed: wrote ${JSON.stringify(expected)}, read ${JSON.stringify(got)}`,
-      );
-    }
-  });
+  const check = (label: string, row: unknown[] | undefined) =>
+    matrix.forEach((expected, i) => {
+      const got = row?.[i] ?? ""; // Google drops trailing empty cells
+      if (got !== expected) {
+        bad++;
+        console.log(
+          `${label}: wrote ${JSON.stringify(expected)}, read ${JSON.stringify(got)}`,
+        );
+      }
+    });
+  check("next to a formula", withFormula);
+  check("raw", raw);
 
   console.log(
     bad === 0 ? "All values round-tripped." : `${bad} value(s) changed.`,
