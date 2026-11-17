@@ -1,6 +1,6 @@
 // Pure mapping of Sheets API responses into the library's public shapes.
-import type { sheets_v4 } from "@googleapis/sheets";
 import { a1 } from "./a1.js";
+import type { GGridRange, GSpreadsheet } from "./transport.js";
 import type {
   AppendResult,
   CellValue,
@@ -47,10 +47,7 @@ export const widest = (rows: readonly (readonly unknown[])[]): number =>
   rows.reduce((w, r) => Math.max(w, r.length), 0);
 
 /** Inverse of `toGridRange` for one tab: a quoted A1 reference. */
-function gridToA1(
-  g: sheets_v4.Schema$GridRange | undefined,
-  tab: TabInfo,
-): string {
+function gridToA1(g: GGridRange | null | undefined, tab: TabInfo): string {
   const r0 = g?.startRowIndex ?? null;
   const r1 = g?.endRowIndex ?? null;
   const c0 = g?.startColumnIndex ?? null;
@@ -69,7 +66,7 @@ function gridToA1(
 }
 
 export function toInfo(
-  s: sheets_v4.Schema$Spreadsheet,
+  s: GSpreadsheet,
   spreadsheetId: string,
 ): SpreadsheetInfo {
   const sheets = s.sheets ?? [];

@@ -1,3 +1,4 @@
+import type { sheets_v4 } from "@googleapis/sheets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SheetTabNotFoundError,
@@ -1142,7 +1143,11 @@ describe("FakeSheets", () => {
       });
       await write(f, "'T'!A2", [["=A1"]], "USER_ENTERED");
       for (const fields of ["*", "sheets", "sheets.data"]) {
-        const got = await f.getSpreadsheet({ ...T, fields });
+        // A broad mask returns more than GSpreadsheet spells out.
+        const got = (await f.getSpreadsheet({
+          ...T,
+          fields,
+        })) as sheets_v4.Schema$Spreadsheet;
         expect(got.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values).toEqual([
           {
             userEnteredValue: { stringValue: "x" },

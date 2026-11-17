@@ -1,10 +1,80 @@
-import type { sheets_v4 } from "@googleapis/sheets";
 import { OAuth2Client } from "google-auth-library";
 import { loadPeer } from "../core/peer.js";
+
+// Hand-rolled subsets of the Sheets v4 shapes the transport carries, so no
+// declaration outside /sheets imports the optional `@googleapis/sheets` peer
+// (like Calendar's `GEvent`). Google's own `sheets_v4` types are assignable to
+// them (checked in test/sheets/google-types.typecheck.ts).
 
 export type GValueRange = {
   range?: string | null;
   values?: unknown[][] | null;
+};
+
+/** 0-based, half-open; an omitted side is open. */
+export type GGridRange = {
+  sheetId?: number | null;
+  startRowIndex?: number | null;
+  endRowIndex?: number | null;
+  startColumnIndex?: number | null;
+  endColumnIndex?: number | null;
+};
+
+export type GSheetProperties = {
+  sheetId?: number | null;
+  title?: string | null;
+  index?: number | null;
+  hidden?: boolean | null;
+  gridProperties?: {
+    rowCount?: number | null;
+    columnCount?: number | null;
+    frozenRowCount?: number | null;
+    frozenColumnCount?: number | null;
+  } | null;
+};
+
+export type GNamedRange = {
+  namedRangeId?: string | null;
+  name?: string | null;
+  range?: GGridRange | null;
+};
+
+export type GProtectedRange = {
+  protectedRangeId?: number | null;
+  range?: GGridRange | null;
+  description?: string | null;
+  warningOnly?: boolean | null;
+};
+
+/** The parts of a `spreadsheets.get` response the library reads. */
+export type GSpreadsheet = {
+  spreadsheetId?: string | null;
+  properties?: {
+    title?: string | null;
+    locale?: string | null;
+    timeZone?: string | null;
+  } | null;
+  sheets?:
+    | {
+        properties?: GSheetProperties | null;
+        protectedRanges?: GProtectedRange[] | null;
+      }[]
+    | null;
+  namedRanges?: GNamedRange[] | null;
+};
+
+/** One `batchUpdate` request (`sheets_v4.Schema$Request`), passed through as-is. */
+export type GRequest = object;
+
+/**
+ * One `batchUpdate` reply (`sheets_v4.Schema$Response`), passed through as-is.
+ * Only the replies that carry ids are spelled out.
+ */
+export type GResponse = {
+  addSheet?: { properties?: GSheetProperties | null } | null;
+  duplicateSheet?: { properties?: GSheetProperties | null } | null;
+  addNamedRange?: { namedRange?: GNamedRange | null } | null;
+  addProtectedRange?: { protectedRange?: GProtectedRange | null } | null;
 };
 
 type Target = { accessToken: string; spreadsheetId: string };
@@ -17,9 +87,7 @@ export type InputOption = "RAW" | "USER_ENTERED";
  * Google's errors as-is; the retry wrapper classifies and sanitizes them.
  */
 export interface SheetsTransport {
-  getSpreadsheet(
-    p: Target & { fields: string },
-  ): Promise<sheets_v4.Schema$Spreadsheet>;
+  getSpreadsheet(p: Target & { fields: string }): Promise<GSpreadsheet>;
   valuesGet(
     p: Target & { range: string; valueRenderOption: RenderOption },
   ): Promise<GValueRange>;
@@ -49,8 +117,8 @@ export interface SheetsTransport {
   ): Promise<{ updates?: { updatedRange?: string | null } | null }>;
   valuesBatchClear(p: Target & { ranges: string[] }): Promise<void>;
   batchUpdate(
-    p: Target & { requests: sheets_v4.Schema$Request[] },
-  ): Promise<{ replies?: sheets_v4.Schema$Response[] | null }>;
+    p: Target & { requests: GRequest[] },
+  ): Promise<{ replies?: GResponse[] | null }>;
 }
 
 /** Field mask for `getInfo()`: structure only, never cell data. */
@@ -63,8 +131,8 @@ export const TAB_FIELDS = "sheets.properties(sheetId,title)";
 type Call<D> = (params: Record<string, unknown>) => Promise<{ data: D }>;
 type SheetsApi = {
   spreadsheets: {
-    get: Call<sheets_v4.Schema$Spreadsheet>;
-    batchUpdate: Call<{ replies?: sheets_v4.Schema$Response[] | null }>;
+    get: Call<GSpreadsheet>;
+    batchUpdate: Call<{ replies?: GResponse[] | null }>;
     values: {
       get: Call<GValueRange>;
       batchGet: Call<{ valueRanges?: GValueRange[] | null }>;

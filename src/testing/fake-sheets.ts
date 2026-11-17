@@ -1,6 +1,11 @@
+// `sheets_v4` is used for internal shapes only: public members use the hand-rolled
+// G* types, so the /testing declarations never import the optional peer.
 import type { sheets_v4 } from "@googleapis/sheets";
 import { a1 } from "../sheets/a1.js";
 import type {
+  GRequest,
+  GResponse,
+  GSpreadsheet,
   GValueRange,
   InputOption,
   RenderOption,
@@ -374,7 +379,7 @@ function outRange(
 export class FakeSheets implements SheetsTransport {
   readonly calls: FakeSheetsCall[] = [];
   /** Every request of each committed `batchUpdate`, in order. */
-  readonly appliedRequests: sheets_v4.Schema$Request[] = [];
+  readonly appliedRequests: GRequest[] = [];
 
   private readonly spreadsheetId: string;
   private readonly title: string;
@@ -490,18 +495,12 @@ export class FakeSheets implements SheetsTransport {
 
   // ---- SheetsTransport ----
 
-  async getSpreadsheet(
-    p: Target & { fields: string },
-  ): Promise<sheets_v4.Schema$Spreadsheet> {
+  async getSpreadsheet(p: Target & { fields: string }): Promise<GSpreadsheet> {
     this.calls.push({ op: "getSpreadsheet", fields: p.fields });
     return this.run(
       "getSpreadsheet",
       p,
-      (s) =>
-        project(
-          this.full(s),
-          parseMask(p.fields),
-        ) as sheets_v4.Schema$Spreadsheet,
+      (s) => project(this.full(s), parseMask(p.fields)) as GSpreadsheet,
     );
   }
 
@@ -608,8 +607,8 @@ export class FakeSheets implements SheetsTransport {
   }
 
   async batchUpdate(
-    p: Target & { requests: sheets_v4.Schema$Request[] },
-  ): Promise<{ replies?: sheets_v4.Schema$Response[] | null }> {
+    p: Target & { requests: GRequest[] },
+  ): Promise<{ replies?: GResponse[] | null }> {
     this.calls.push({
       op: "batchUpdate",
       requests: Array.isArray(p.requests) ? p.requests.length : 0,

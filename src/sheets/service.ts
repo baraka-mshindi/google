@@ -1,3 +1,4 @@
+import type { sheets_v4 } from "@googleapis/sheets";
 import type { GoogleCore } from "../core/create-google.js";
 import {
   InvalidSheetsInputError,
@@ -578,7 +579,8 @@ export function createSheets(
             false,
           );
         });
-        return res.replies ?? [];
+        // The transport passes Google's replies through untouched.
+        return (res.replies ?? []) as sheets_v4.Schema$Response[];
       },
     };
   }
