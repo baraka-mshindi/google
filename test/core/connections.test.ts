@@ -17,10 +17,10 @@ const cfg = {
   clientId: CLIENT_ID,
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
+  email: "support@northwind.example",
+  hd: "northwind.example",
 };
 
 let store: InMemoryStore;
@@ -37,7 +37,7 @@ const connect = async (tenantId = "t1") => {
     actorId: "u1",
     services: ["gmail"],
   });
-  const { code, state } = fake.consent(url, careers);
+  const { code, state } = fake.consent(url, support);
   return g.oauth.handleCallback({ code, state });
 };
 
@@ -50,7 +50,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -90,9 +90,9 @@ describe("connections api", () => {
     const v = await g.connections.setDisplayName({
       tenantId: "t1",
       connectionId: connection.id,
-      displayName: "SunCulture Careers",
+      displayName: "Northwind Support",
     });
-    expect(v.displayName).toBe("SunCulture Careers");
+    expect(v.displayName).toBe("Northwind Support");
     expect(v.updatedAt).toEqual(clock);
     expect(v).not.toHaveProperty("refreshToken");
     expect(

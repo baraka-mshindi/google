@@ -37,7 +37,7 @@ beforeEach(async () => {
   const g = createGoogle({
     store,
     keyProvider: kpA,
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     now: () => clock,
   });

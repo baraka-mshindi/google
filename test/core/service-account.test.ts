@@ -14,7 +14,7 @@ import {
 } from "../../src/core/service-account.js";
 import { PEM_LABEL, fakePem } from "./fixtures/fake-pem.js";
 
-const EMAIL = "amt-sheets@amt-prod.iam.gserviceaccount.com";
+const EMAIL = "sheets-writer@example-project.iam.gserviceaccount.com";
 const PEM = fakePem("MIIEvQIBADANBgkqhkiG9w0BAQEFAASC-not-a-real-key");
 
 function minter(answers: (MintedToken | Error)[]): {

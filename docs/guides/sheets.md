@@ -1,9 +1,8 @@
 # Working with Google Sheets
 
 How to read, append to and format a tenant's spreadsheets as one of its connected Google
-accounts, using `@mshindi-labs/google/sheets`. The examples follow an HRMS flow (export
-applicants to a tracking sheet, read a sheet of interview panels back as objects);
-adapt the names to your application.
+accounts, using `@mshindi-labs/google/sheets`. The examples export customers to a shared sheet
+and read a staff list back as objects; adapt the names to your application.
 
 The handle reads and writes **cell data and structure** of one spreadsheet. It does not
 create, copy, share or delete spreadsheet files, and it does not decide who in your app
@@ -35,7 +34,7 @@ const { url } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail", "calendar", "sheets"],
-  intendedEmail: "careers@example.com",
+  intendedEmail: "reports@example.com",
   connectionId, // add scopes to the existing connection
 });
 ```
@@ -159,7 +158,7 @@ ranges and protected ranges. It never fetches cell data.
 ### Values
 
 ```ts
-const grid = await sheet.getValues({ tab: "Applicants", range: "A1:D20" });
+const grid = await sheet.getValues({ tab: "Customers", range: "A1:D20" });
 // grid: CellValue[][]   (string | number | boolean)
 ```
 
@@ -170,7 +169,7 @@ const grid = await sheet.getValues({ tab: "Applicants", range: "A1:D20" });
 - `"formula"`: the formula text for formula cells.
 
 ```ts
-const raw = await sheet.getValues("Applicants!E2:E50", {
+const raw = await sheet.getValues("Customers!E2:E50", {
   valueRender: "unformatted",
 });
 ```
@@ -184,10 +183,10 @@ The last used row of a tab is `(await sheet.getValues({ tab })).length`.
 ### Rows as objects
 
 ```ts
-const panels = await sheet.getRows("Interview panels");
+const staff = await sheet.getRows("Staff");
 
-for (const { rowNumber, data } of panels) {
-  console.log(rowNumber, data["Panelist"], data["Email"]);
+for (const { rowNumber, data } of staff) {
+  console.log(rowNumber, data["Name"], data["Email"]);
 }
 ```
 
@@ -209,9 +208,9 @@ headers are not on row 1.
 ### Find rows
 
 ```ts
-const hits = await sheet.findRows("Applicants", {
+const hits = await sheet.findRows("Customers", {
   column: { header: "Email" }, // or a letter: "C"
-  where: (value) => String(value).toLowerCase() === "jane@applicant.com",
+  where: (value) => String(value).toLowerCase() === "jane@customer.example",
 });
 
 for (const { rowNumber, values } of hits) {
@@ -228,8 +227,8 @@ tab. For a very large tab, read the one column with `getValues` and look there i
 ### `update`
 
 ```ts
-await sheet.update({ tab: "Applicants", range: "A2" }, [
-  ["Jane Doe", "jane@applicant.com", 42, true, null],
+await sheet.update({ tab: "Customers", range: "A2" }, [
+  ["Jane Doe", "jane@customer.example", 42, true, null],
 ]);
 ```
 
@@ -240,7 +239,7 @@ request. `clear(range | ranges[])` clears values and leaves formatting alone.
 ### Plain text stays text: `raw` vs `user_entered`
 
 `input` is `"raw"` by default. Under `raw`, a string is stored as exactly that text. No
-number, date or formula parsing happens, so an applicant who types `=IMPORTXML(...)` as
+number, date or formula parsing happens, so a customer who types `=IMPORTXML(...)` as
 their name gets a cell that **shows** that text and runs nothing. `+254712345678`, `-5`,
 `1/2`, `5%`, `TRUE` and a leading `'` all stay as written.
 
@@ -262,11 +261,11 @@ The string must start with `=`. One row can mix a formula with untrusted text th
 literal:
 
 ```ts
-await sheet.update({ tab: "Applicants", range: "A2" }, [
+await sheet.update({ tab: "Customers", range: "A2" }, [
   [
-    applicant.name, // literal, even if it starts with "="
+    customer.name, // literal, even if it starts with "="
     {
-      formula: `=HYPERLINK("https://hrms.example.com/people/${applicant.id}", "Profile")`,
+      formula: `=HYPERLINK("https://app.example.com/customers/${customer.id}", "Profile")`,
     },
   ],
 ]);
@@ -278,8 +277,8 @@ from a user before putting it inside a formula string, the same as you would for
 ## 5. Appending safely
 
 ```ts
-const { range, firstRow, lastRow } = await sheet.append("Applicants", [
-  [applicant.name, applicant.email, applicant.appliedAt],
+const { range, firstRow, lastRow } = await sheet.append("Customers", [
+  [customer.name, customer.email, customer.signedUpAt],
 ]);
 ```
 
@@ -295,17 +294,17 @@ guesses whether the rows landed. You decide, after looking:
 ```ts
 import { SheetsWriteOutcomeUnknownError } from "@mshindi-labs/google/core";
 
-async function appendApplicant(email: string, row: string[]) {
+async function appendCustomer(email: string, row: string[]) {
   try {
-    await sheet.append("Applicants", [row]);
+    await sheet.append("Customers", [row]);
   } catch (err) {
     if (!(err instanceof SheetsWriteOutcomeUnknownError)) throw err;
 
     // The outcome is unknown. Read the tail before trying again.
-    const column = await sheet.getValues({ tab: "Applicants", range: "B:B" });
+    const column = await sheet.getValues({ tab: "Customers", range: "B:B" });
     const tail = column.slice(-20).flat();
     if (!tail.includes(email)) {
-      await sheet.append("Applicants", [row]); // it did not land
+      await sheet.append("Customers", [row]); // it did not land
     }
   }
 }
@@ -455,23 +454,23 @@ import { FakeSheets } from "@mshindi-labs/google/testing";
 
 const fake = new FakeSheets({
   spreadsheetId: "sheet-1",
-  title: "Hiring",
-  tabs: [{ title: "Applicants", rows: [["Name", "Email"]] }],
+  title: "Customer export",
+  tabs: [{ title: "Customers", rows: [["Name", "Email"]] }],
 });
 const sheets = createSheets(google, { transport: fake });
 const sheet = sheets.open({ tenantId, connectionId, spreadsheetId: "sheet-1" });
 
-await sheet.append("Applicants", [["Jane Doe", "jane@applicant.com"]]);
+await sheet.append("Customers", [["Jane Doe", "jane@customer.example"]]);
 
-expect(fake.values("Applicants")).toEqual([
+expect(fake.values("Customers")).toEqual([
   ["Name", "Email"],
-  ["Jane Doe", "jane@applicant.com"],
+  ["Jane Doe", "jane@customer.example"],
 ]);
 ```
 
 `google` is a `createGoogle` instance with a connected account (in tests, use
 `InMemoryStore`, `LocalKeyProvider` and `FakeGoogleOAuth` from the same entry point).
-`fake.values(title)` is the grid of a tab, `fake.formulaAt("Applicants", "C2")` is the
+`fake.values(title)` is the grid of a tab, `fake.formulaAt("Customers", "C2")` is the
 formula stored in a cell, and `fake.calls` lists every call made. To test your handling
 of a lost response, make the next call fail after it was applied:
 
@@ -484,7 +483,7 @@ fake.failNext(
   },
 );
 // the next sheet.append(...) throws SheetsWriteOutcomeUnknownError,
-// and the row is in fake.values("Applicants").
+// and the row is in fake.values("Customers").
 ```
 
 To make Google answer with an HTTP error, build one with `sheetsHttpError(status,

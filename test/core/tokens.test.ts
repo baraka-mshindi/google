@@ -16,10 +16,10 @@ const cfg = {
   clientId: CLIENT_ID,
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
+  email: "support@northwind.example",
+  hd: "northwind.example",
 };
 
 let store: InMemoryStore;
@@ -36,7 +36,7 @@ const connect = async (tenantId = "t1") => {
     actorId: "u1",
     services: ["gmail"],
   });
-  const { code, state } = fake.consent(url, careers);
+  const { code, state } = fake.consent(url, support);
   return g.oauth.handleCallback({ code, state });
 };
 
@@ -49,7 +49,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -269,8 +269,8 @@ describe("token cache LRU", () => {
       });
       const c = fake.consent(url, {
         sub,
-        email: `${sub}@sunculture.io`,
-        hd: "sunculture.io",
+        email: `${sub}@northwind.example`,
+        hd: "northwind.example",
       });
       ids.push((await g.oauth.handleCallback(c)).connection.id);
     }

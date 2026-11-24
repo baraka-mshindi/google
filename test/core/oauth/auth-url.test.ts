@@ -15,7 +15,7 @@ import { LocalKeyProvider } from "../../../src/testing/local-key-provider.js";
 import type { ConnectionRecord } from "../../../src/core/types.js";
 
 const CLIENT_ID = "123-abc.apps.googleusercontent.com";
-const CALLBACK = "https://hrms.io/cb";
+const CALLBACK = "https://app.example.com/cb";
 const cfg = {
   actorId: "admin1",
   clientId: CLIENT_ID,
@@ -66,7 +66,7 @@ beforeEach(async () => {
   await g.clients.configure({
     ...cfg,
     tenantId: "t1",
-    hostedDomain: "sunculture.io",
+    hostedDomain: "northwind.example",
   });
   await g.clients.configure({ ...cfg, tenantId: "t2" });
   events.length = 0;
@@ -114,7 +114,7 @@ describe("oauth.createAuthUrl", () => {
       tenantId: "t1",
       actorId: "u1",
       services: ["gmail"],
-      intendedEmail: " Careers@SunCulture.io ",
+      intendedEmail: " Support@Northwind.example ",
     });
     const u = new URL(url);
     expect(u.origin + u.pathname).toBe(
@@ -129,8 +129,8 @@ describe("oauth.createAuthUrl", () => {
       include_granted_scopes: "true",
       code_challenge_method: "S256",
       scope: "openid email https://www.googleapis.com/auth/gmail.send",
-      login_hint: "careers@sunculture.io",
-      hd: "sunculture.io",
+      login_hint: "support@northwind.example",
+      hd: "northwind.example",
     });
     expect(u.searchParams.get("state")).toMatch(/^[\w-]{43}$/);
     expect(u.searchParams.get("code_challenge")).toMatch(/^[\w-]{43}$/);
@@ -142,7 +142,7 @@ describe("oauth.createAuthUrl", () => {
       tenantId: "t1",
       actorId: "u1",
       services: ["gmail"],
-      intendedEmail: " Careers@SunCulture.io ",
+      intendedEmail: " Support@Northwind.example ",
     });
     const state = stateOf(url);
     const rec = await store.consumeOAuthState(hex(sha256(state)), now());
@@ -150,7 +150,7 @@ describe("oauth.createAuthUrl", () => {
     expect(rec).toMatchObject({
       tenantId: "t1",
       actorId: "u1",
-      intendedEmail: "careers@sunculture.io",
+      intendedEmail: "support@northwind.example",
       connectionId: null,
       scopes: ["openid", "email", "https://www.googleapis.com/auth/gmail.send"],
       expiresAt,
@@ -232,7 +232,7 @@ describe("oauth.createAuthUrl", () => {
       actorId: "u",
       services: ["gmail"],
     });
-    const out = fake.consent(url, { sub: "s1", email: "a@sunculture.io" });
+    const out = fake.consent(url, { sub: "s1", email: "a@northwind.example" });
     expect(out.state).toBe(stateOf(url));
     expect(out.code).toBeTruthy();
   });

@@ -2,7 +2,7 @@
 
 **Status:** Draft v1 · **Date:** 2026-11-05 · **Owner:** Mshindi Labs
 
-A server-side TypeScript library that lets multi-tenant apps (HRMS, ATS, …) send email
+A server-side TypeScript library that lets multi-tenant SaaS apps send email
 through each tenant's **own** Google Workspace accounts via the Gmail API, with no SMTP
 and no per-tenant secrets in environment variables. Calendar and Sheets are built on the
 same foundation.
@@ -15,7 +15,7 @@ same foundation.
 
 1. Each tenant brings its own Google OAuth client (client ID + secret), stored in the
    host app's database.
-2. The library generates a consent URL; a tenant user (e.g. `careers@sunculture.io`)
+2. The library generates a consent URL; a tenant user (e.g. `support@northwind.example`)
    authorizes; the library stores an encrypted refresh token for that account.
 3. Host code sends mail with one call, referencing only IDs — never secrets.
 4. Strict tenant isolation: one tenant can never read, use, or overwrite another
@@ -30,7 +30,7 @@ same foundation.
 - Gmail "send as" aliases.
 - Template rendering (host renders HTML/text).
 - A built-in job queue (documented pattern only).
-- App-level authorization ("may recruiter X send as careers@?") — host decides.
+- App-level authorization ("may user X send as support@?") — host decides.
 - Browser/edge runtimes. Node ≥ 18 only.
 
 ---
@@ -236,7 +236,7 @@ import { createGoogle } from "@mshindi-labs/google/core";
 const google = createGoogle({
   store, // CredentialStore
   keyProvider, // KeyProvider
-  callbackUrl: "https://hrms.example.com/api/google/callback", // fixed, HTTPS required outside localhost
+  callbackUrl: "https://app.example.com/api/google/callback", // fixed, HTTPS required outside localhost
   onEvent: (e) => audit.write(e), // optional
   logger, // optional; receives redacted messages only
 });
@@ -253,7 +253,7 @@ await google.clients.configure({
   actorId,
   clientId,
   clientSecret,
-  hostedDomain: "sunculture.io", // optional
+  hostedDomain: "northwind.example", // optional
 });
 
 await google.clients.get(tenantId);
@@ -267,7 +267,7 @@ const { url, expiresAt } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail"], // → scopes via the service registry
-  intendedEmail: "careers@sunculture.io", // optional but recommended
+  intendedEmail: "support@northwind.example", // optional but recommended
   connectionId, // optional: add scopes to an existing connection
 });
 ```
@@ -376,18 +376,22 @@ const { messageId, threadId } = await gmail.send({
   tenantId,
   connectionId,
   actorId, // for audit
-  fromName: "SunCulture Careers", // optional; overrides connection.displayName
-  to: ["jane@applicant.com"], // string | { name, address }, also cc/bcc
+  fromName: "Northwind Support", // optional; overrides connection.displayName
+  to: ["jane@customer.example"], // string | { name, address }, also cc/bcc
   cc,
   bcc,
-  replyTo: "recruiter@sunculture.io",
-  subject: "Your application",
+  replyTo: "team@northwind.example",
+  subject: "Your order has shipped",
   html: "<p>…</p>",
   text: "…", // optional; generated from html if omitted
   attachments: [
-    { filename: "offer.pdf", content: buffer, contentType: "application/pdf" },
+    {
+      filename: "invoice.pdf",
+      content: buffer,
+      contentType: "application/pdf",
+    },
   ],
-  headers: { "X-Hrms-Application-Id": "app_123" },
+  headers: { "X-App-Order-Id": "order_123" },
   thread: { threadId, inReplyTo, references }, // optional: reply in an existing thread
 });
 ```
@@ -428,7 +432,7 @@ const { messageId, threadId } = await gmail.send({
 ### 8.4 Bulk sends (documented pattern, not library code)
 
 The docs show a `pg-boss` queue: one job per recipient, with an idempotency key such as
-`ats:rejection:<applicationId>`. The worker records `messageId` against the key and
+`billing:renewal-reminder:<subscriptionId>`. The worker records `messageId` against the key and
 skips the job if it already has one. `SendOutcomeUnknownError` routes the job to manual
 review instead of retrying. Per-connection concurrency of 1–2 stays under Gmail's
 per-user rate limits.
@@ -766,11 +770,11 @@ redacted before attaching.
 | SQL injection or DB write access swapping tokens between tenants | AAD binding (I3), tenant re-check (I2), optional RLS                                    |
 | CSRF / login-CSRF on OAuth callback                              | Server-side single-use hashed state bound to actor and tenant (I4)                      |
 | Authorization code interception                                  | PKCE S256, fixed HTTPS redirect URI (I5)                                                |
-| Wrong account connected (personal Gmail instead of `careers@`)   | ID token verification + `intendedEmail` + `hd` checks; the token is revoked on mismatch |
+| Wrong account connected (personal Gmail instead of `support@`)   | ID token verification + `intendedEmail` + `hd` checks; the token is revoked on mismatch |
 | Over-privileged tokens                                           | `gmail.send` + `openid email` only; scope check per service                             |
-| Email header injection via applicant data                        | CR/LF rejection, header allowlist, MailComposer                                         |
+| Email header injection via user-supplied data                    | CR/LF rejection, header allowlist, MailComposer                                         |
 | Secrets in logs or error trackers                                | Redaction layer; tested by fuzz (§13)                                                   |
-| Duplicate emails to applicants                                   | I7 retry rules; idempotency-key queue pattern                                           |
+| Duplicate emails to recipients                                   | I7 retry rules; idempotency-key queue pattern                                           |
 | Ex-employee's mailbox still sending                              | `invalid_grant` → revoked; admin `disconnect()`; audit trail                            |
 | Compromised host server                                          | Out of scope: it can call `send` legitimately. Limited by KMS IAM and audit.            |
 

@@ -44,7 +44,7 @@ beforeEach(() => {
   g = createGoogle({
     store,
     keyProvider: kp,
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     onEvent: (e) => {
       events.push(e);
     },
@@ -151,8 +151,8 @@ describe("clients.configure / get", () => {
   });
 
   it("normalizes hostedDomain to lowercase", async () => {
-    await g.clients.configure({ ...c, hostedDomain: " SunCulture.IO " });
-    expect((await g.clients.get("t1"))!.hostedDomain).toBe("sunculture.io");
+    await g.clients.configure({ ...c, hostedDomain: " Northwind.EXAMPLE " });
+    expect((await g.clients.get("t1"))!.hostedDomain).toBe("northwind.example");
   });
 
   it("treats empty hostedDomain as null", async () => {

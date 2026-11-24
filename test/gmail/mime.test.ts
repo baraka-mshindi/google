@@ -19,7 +19,10 @@ import { buildMime, MAX_ATTACHMENT_BYTES } from "../../src/gmail/mime.js";
 import type { NormalizedMessage } from "../../src/gmail/validate.js";
 
 const UNICODE_BREAKS = new RegExp("[\\u2028\\u2029\\u0085]");
-const FROM = { name: "SunCulture Careers", address: "careers@sunculture.io" };
+const FROM = {
+  name: "Northwind Support",
+  address: "support@northwind.example",
+};
 const msg = (patch: Partial<NormalizedMessage> = {}): NormalizedMessage => ({
   fromName: null,
   to: [{ name: null, address: "jane@example.com" }],
@@ -46,18 +49,21 @@ describe("buildMime", () => {
   it("sets From to the connection address with display name", async () => {
     const parsed = await simpleParser(await buildMime(msg(), FROM));
     expect(parsed.from?.value[0]).toEqual({
-      name: "SunCulture Careers",
-      address: "careers@sunculture.io",
+      name: "Northwind Support",
+      address: "support@northwind.example",
     });
   });
 
   it("omits the display name when null", async () => {
     const parsed = await simpleParser(
-      await buildMime(msg(), { name: null, address: "careers@sunculture.io" }),
+      await buildMime(msg(), {
+        name: null,
+        address: "support@northwind.example",
+      }),
     );
     expect(parsed.from?.value[0]).toEqual({
       name: "",
-      address: "careers@sunculture.io",
+      address: "support@northwind.example",
     });
   });
 
@@ -143,7 +149,7 @@ describe("buildMime", () => {
         msg({
           attachments: [
             {
-              filename: "offer.pdf",
+              filename: "invoice.pdf",
               content: Buffer.from("%PDF-1.4 hi"),
               contentType: "application/pdf",
             },
@@ -159,7 +165,7 @@ describe("buildMime", () => {
     );
     expect(parsed.attachments).toHaveLength(2);
     expect(parsed.attachments[0]).toMatchObject({
-      filename: "offer.pdf",
+      filename: "invoice.pdf",
       contentType: "application/pdf",
     });
     expect(parsed.attachments[0]?.content.toString()).toBe("%PDF-1.4 hi");
@@ -257,7 +263,7 @@ describe("buildMime", () => {
     const raw = await rawOf(msg());
     const ids = headerLines(raw, "Message-ID");
     expect(ids).toHaveLength(1);
-    expect(ids[0]).toMatch(/^Message-ID: <[0-9a-f-]{36}@sunculture\.io>$/i);
+    expect(ids[0]).toMatch(/^Message-ID: <[0-9a-f-]{36}@northwind\.example>$/i);
     expect(raw).not.toMatch(/^X-Mailer:/im);
     expect(raw.toLowerCase()).not.toContain(hostname().toLowerCase());
   });

@@ -29,7 +29,7 @@ describe("redact", () => {
   });
 
   it("leaves ordinary text alone", () =>
-    expect(redact("hello careers@x.io")).toBe("hello careers@x.io"));
+    expect(redact("hello support@x.io")).toBe("hello support@x.io"));
 
   it("keeps surrounding context", () => {
     expect(redact("GET /cb?code=abc&state=x")).toBe(

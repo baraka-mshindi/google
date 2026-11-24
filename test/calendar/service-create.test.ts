@@ -21,11 +21,11 @@ const cfg = {
   clientId: "123-abc.apps.googleusercontent.com",
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
-  name: "Careers Team",
+  email: "support@northwind.example",
+  hd: "northwind.example",
+  name: "Support Team",
 };
 
 let store: InMemoryStore;
@@ -54,15 +54,15 @@ const input = (over: Partial<CreateEventInput> = {}): CreateEventInput => ({
   tenantId: "t1",
   connectionId: connId,
   actorId: "u1",
-  idempotencyKey: "interview-42",
-  title: "Interview: Jane Doe",
-  description: "Panel interview",
+  idempotencyKey: "booking-42",
+  title: "Consultation: Jane Doe",
+  description: "Initial consultation",
   start: D("2030-01-07T09:00:00Z"),
   end: D("2030-01-07T10:00:00Z"),
   timeZone: "Africa/Nairobi",
   attendees: [
-    { email: "jane@applicant.com", displayName: "Jane Doe" },
-    { email: "panel@sunculture.io", optional: true },
+    { email: "jane@customer.example", displayName: "Jane Doe" },
+    { email: "host@northwind.example", optional: true },
   ],
   meeting: { type: "google_meet" },
   ...over,
@@ -83,7 +83,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -101,17 +101,17 @@ beforeEach(async () => {
     actorId: "u1",
     services: ["gmail", "calendar"],
   });
-  const { code, state } = fake.consent(url, careers);
+  const { code, state } = fake.consent(url, support);
   connId = (await g.oauth.handleCallback({ code, state })).connection.id;
   events.length = 0;
-  cal = new FakeCalendar({ organizerEmail: careers.email });
+  cal = new FakeCalendar({ organizerEmail: support.email });
 });
 
 describe("createEvent — in person", () => {
   it("one insert with the caller's sendUpdates, one invite, one created event", async () => {
     const r = await svc().createEvent(inPerson());
     expect(r.created).toBe(true);
-    expect(r.eventId).toBe(deriveEventId("t1", careers.email, "interview-42"));
+    expect(r.eventId).toBe(deriveEventId("t1", support.email, "booking-42"));
     expect(r.meeting).toEqual({ type: "in_person", location: "HQ, Room 4" });
     expect(ops()).toEqual(["insert:all"]);
     expect(invites()).toHaveLength(1);
@@ -126,14 +126,18 @@ describe("createEvent — in person", () => {
       timeZone: "Africa/Nairobi",
     });
     expect(stored.attendees).toEqual([
-      { email: "jane@applicant.com", displayName: "Jane Doe", optional: false },
-      { email: "panel@sunculture.io", optional: true },
+      {
+        email: "jane@customer.example",
+        displayName: "Jane Doe",
+        optional: false,
+      },
+      { email: "host@northwind.example", optional: true },
     ]);
     const priv = stored.extendedProperties?.private;
     expect(priv).toMatchObject({
       mshindiGoogle: "v1",
       mshindiTenant: "t1",
-      mshindiKey: "interview-42",
+      mshindiKey: "booking-42",
       mshindiInvite: "sent",
     });
     expect(priv?.mshindiFingerprint).toMatch(/^[0-9a-f]{32}$/);
@@ -144,7 +148,7 @@ describe("createEvent — in person", () => {
       actorId: "u1",
       connectionId: connId,
       eventId: r.eventId,
-      title: "Interview: Jane Doe",
+      title: "Consultation: Jane Doe",
     });
   });
 
@@ -152,7 +156,7 @@ describe("createEvent — in person", () => {
     await svc().createEvent(inPerson({ sendUpdates: "external_only" }));
     expect(ops()).toEqual(["insert:externalOnly"]);
     expect(invites()).toEqual([
-      expect.objectContaining({ to: ["jane@applicant.com"] }),
+      expect.objectContaining({ to: ["jane@customer.example"] }),
     ]);
   });
 });
@@ -205,7 +209,7 @@ describe("createEvent — Google Meet", () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConferencingUnavailableError);
     expect((err as Error).message).toMatch(/new idempotency key/i);
-    const id = deriveEventId("t1", careers.email, "interview-42");
+    const id = deriveEventId("t1", support.email, "booking-42");
     expect(cal.events.get(id)?.status).toBe("cancelled");
     expect(ops()).toEqual(["insert:none", "delete:none"]);
     expect(cal.notifications).toHaveLength(0);
@@ -305,7 +309,7 @@ describe("createEvent — idempotency", () => {
   });
 
   it("existing id without our stamp → EventConflictError", async () => {
-    const id = deriveEventId("t1", careers.email, "interview-42");
+    const id = deriveEventId("t1", support.email, "booking-42");
     cal.events.set(id, { id, status: "confirmed", summary: "someone else" });
     await expect(svc().createEvent(input())).rejects.toBeInstanceOf(
       EventConflictError,

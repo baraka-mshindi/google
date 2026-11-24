@@ -26,7 +26,7 @@ export async function setup(
   const google = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: oauth,
     onEvent: (e) => {
       events.push(e);
@@ -46,8 +46,8 @@ export async function setup(
   });
   const { code, state } = oauth.consent(url, {
     sub: "s1",
-    email: "careers@sunculture.io",
-    hd: "sunculture.io",
+    email: "support@northwind.example",
+    hd: "northwind.example",
   });
   const connectionId = (await google.oauth.handleCallback({ code, state }))
     .connection.id;

@@ -1,7 +1,7 @@
 # Bulk sending
 
 The library sends one message per call and does not queue. For batches (for example
-rejection emails to every applicant of a closed job), put a queue in front of it. This
+renewal reminders to every customer whose plan renews next week), put a queue in front of it. This
 guide uses [pg-boss](https://github.com/timgit/pg-boss); any queue with per-key
 concurrency and a dead-letter or manual-review path works.
 
@@ -23,8 +23,8 @@ leave anything ambiguous for a human.
 ## Idempotency key
 
 Build the key from the business fact, not from the job id:
-`ats:rejection:<applicationId>`. The same application can then never receive the same
-rejection twice, even if it is enqueued twice by a bug or a retry of the enqueueing code.
+`billing:renewal-reminder:<subscriptionId>`. The same subscription can then never receive the same
+reminder twice, even if it is enqueued twice by a bug or a retry of the enqueueing code.
 
 ```sql
 create table email_sends (
@@ -45,22 +45,22 @@ mixed ESM/CommonJS loading, `instanceof` is unreliable).
 import PgBoss from "pg-boss";
 import type { RateLimitedError } from "@mshindi-labs/google/core";
 
-// `db`, `gmail`, `logger`, `applicantAddress` and `renderRejection` are your app's.
-type RejectionJob = {
+// `db`, `gmail`, `logger`, `customerAddress` and `renderReminder` are your app's.
+type ReminderJob = {
   key: string;
-  applicationId: string;
+  subscriptionId: string;
   tenantId: string;
   connectionId: string;
 };
 
-const QUEUE = "rejection-email";
+const QUEUE = "reminder-email";
 const boss = new PgBoss(process.env.DATABASE_URL!);
 await boss.start();
 await boss.createQueue(QUEUE);
 
 // Enqueue: one job per recipient. singletonKey de-duplicates queued jobs.
-export async function enqueueRejection(app: Application) {
-  const key = `ats:rejection:${app.id}`;
+export async function enqueueReminder(sub: Subscription) {
+  const key = `billing:renewal-reminder:${sub.id}`;
   await db.query(
     "insert into email_sends (idempotency_key) values ($1) on conflict do nothing",
     [key],
@@ -69,9 +69,9 @@ export async function enqueueRejection(app: Application) {
     QUEUE,
     {
       key,
-      applicationId: app.id,
-      tenantId: app.tenantId,
-      connectionId: app.connectionId,
+      subscriptionId: sub.id,
+      tenantId: sub.tenantId,
+      connectionId: sub.connectionId,
     },
     { singletonKey: key, retryLimit: 5, retryBackoff: true },
   );
@@ -88,7 +88,7 @@ const setStatus = (
   );
 
 // Give the key back so a later job can claim it, then schedule that job.
-async function requeue(job: PgBoss.Job<RejectionJob>, delaySeconds: number) {
+async function requeue(job: PgBoss.Job<ReminderJob>, delaySeconds: number) {
   await setStatus(job.data.key, "pending");
   await boss.send(QUEUE, job.data, {
     startAfter: Math.max(1, Math.ceil(delaySeconds)),
@@ -98,11 +98,11 @@ async function requeue(job: PgBoss.Job<RejectionJob>, delaySeconds: number) {
   });
 }
 
-await boss.work<RejectionJob>(
+await boss.work<ReminderJob>(
   QUEUE,
   // Keep this worker's concurrency at 1-2 (see "Concurrency" below).
   async ([job]) => {
-    const { key, applicationId, tenantId, connectionId } = job.data;
+    const { key, subscriptionId, tenantId, connectionId } = job.data;
 
     // 1. Claim. Only one job can move the key from pending to sending.
     const claimed = await db.query(
@@ -118,11 +118,11 @@ await boss.work<RejectionJob>(
       ({ messageId } = await gmail.send({
         tenantId,
         connectionId,
-        actorId: "system:ats",
-        to: [await applicantAddress(applicationId)],
-        subject: "Your application",
-        html: await renderRejection(applicationId),
-        headers: { "X-Ats-Idempotency-Key": key },
+        actorId: "system:billing",
+        to: [await customerAddress(subscriptionId)],
+        subject: "Your subscription renews soon",
+        html: await renderReminder(subscriptionId),
+        headers: { "X-App-Idempotency-Key": key },
       }));
     } catch (err) {
       const code = (err as { code?: string } | null)?.code;
@@ -217,7 +217,7 @@ in parallel.
 
 ## Checklist
 
-- One job per recipient; key like `ats:rejection:<applicationId>`.
+- One job per recipient; key like `billing:renewal-reminder:<subscriptionId>`.
 - Claim the key (`pending` → `sending`) before sending; skip the job if the claim fails.
 - Record `messageId` outside the retry path; if that write fails, mark `review`.
 - `SendOutcomeUnknownError` and stale `sending` rows lead to manual review, never a retry.
