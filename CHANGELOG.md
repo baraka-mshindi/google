@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.2](https://github.com/baraka-mshindi/google/compare/google-v1.3.1...google-v1.3.2) (2026-11-24)
+
+
+### Documentation
+
+* publish a docs site to GitHub Pages and neutralise examples ([fbe319a](https://github.com/baraka-mshindi/google/commit/fbe319a3b9657c9f5b5c1b99ef0a39e07a033719))
+* publish a VitePress docs site to GitHub Pages ([c3f7819](https://github.com/baraka-mshindi/google/commit/c3f7819cf662028ca04d0e5696fb2abe7d43ab06))
+* replace internal project names and recruiting examples ([b06eef7](https://github.com/baraka-mshindi/google/commit/b06eef756d425be13b3d636ff949239ba8b9adf4))
+
 ## [1.3.1](https://github.com/baraka-mshindi/google/compare/google-v1.3.0...google-v1.3.1) (2026-11-17)
 
 
