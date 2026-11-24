@@ -55,10 +55,10 @@ const connect = async (account: Account, opts: Opts = {}) => {
   }
 };
 
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
+  email: "support@northwind.example",
+  hd: "northwind.example",
 };
 
 beforeEach(async () => {
@@ -72,7 +72,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: kp,
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -83,7 +83,7 @@ beforeEach(async () => {
   await g.clients.configure({
     ...cfg,
     tenantId: "t1",
-    hostedDomain: "sunculture.io",
+    hostedDomain: "northwind.example",
   });
   await g.clients.configure({ ...cfg, tenantId: "t2" });
   events.length = 0;
@@ -91,8 +91,8 @@ beforeEach(async () => {
 
 describe("oauth.handleCallback", () => {
   it("creates an active connection with verified email and sub", async () => {
-    const r = await connect(careers, {
-      intendedEmail: "Careers@SunCulture.io",
+    const r = await connect(support, {
+      intendedEmail: "Support@Northwind.example",
     });
     expect(r.created).toBe(true);
     expect(r.tenantId).toBe("t1");
@@ -100,7 +100,7 @@ describe("oauth.handleCallback", () => {
     expect(r.connection).toMatchObject({
       tenantId: "t1",
       googleSub: "s1",
-      email: "careers@sunculture.io",
+      email: "support@northwind.example",
       status: "active",
       statusReason: null,
       connectedBy: "u1",
@@ -124,7 +124,7 @@ describe("oauth.handleCallback", () => {
       actorId: "u1",
       services: ["gmail"],
     });
-    const { code, state } = fake.consent(url, careers);
+    const { code, state } = fake.consent(url, support);
     await g.oauth.handleCallback({ code, state });
     await expect(
       g.oauth.handleCallback({ code, state }),
@@ -138,7 +138,7 @@ describe("oauth.handleCallback", () => {
       actorId: "u1",
       services: ["gmail"],
     });
-    const { code, state } = fake.consent(url, careers);
+    const { code, state } = fake.consent(url, support);
     clock = new Date(clock.getTime() + 600_001);
     await expect(
       g.oauth.handleCallback({ code, state }),
@@ -161,7 +161,7 @@ describe("oauth.handleCallback", () => {
       actorId: "u1",
       services: ["gmail"],
     });
-    const { state } = fake.consent(url, careers);
+    const { state } = fake.consent(url, support);
     await expect(
       g.oauth.handleCallback({ state, error: "access_denied" }),
     ).rejects.toBeInstanceOf(OAuthConsentDeniedError);
@@ -181,7 +181,7 @@ describe("oauth.handleCallback", () => {
         actorId: "u1",
         services: ["gmail"],
       });
-      const { state } = fake.consent(url, careers);
+      const { state } = fake.consent(url, support);
       await expect(
         g.oauth.handleCallback({ state, ...p }),
       ).rejects.toBeInstanceOf(InvalidOAuthStateError);
@@ -198,8 +198,8 @@ describe("oauth.handleCallback", () => {
   it("wrong account → UnexpectedAccountError and token revoked at Google", async () => {
     await expect(
       connect(
-        { sub: "s9", email: "me@gmail.com", hd: "sunculture.io" },
-        { intendedEmail: "careers@sunculture.io" },
+        { sub: "s9", email: "me@gmail.com", hd: "northwind.example" },
+        { intendedEmail: "support@northwind.example" },
       ),
     ).rejects.toBeInstanceOf(UnexpectedAccountError);
     expect(fake.revoked).toHaveLength(1);
@@ -211,8 +211,8 @@ describe("oauth.handleCallback", () => {
     fake.failRevoke(true);
     await expect(
       connect(
-        { sub: "s9", email: "me@gmail.com", hd: "sunculture.io" },
-        { intendedEmail: "careers@sunculture.io" },
+        { sub: "s9", email: "me@gmail.com", hd: "northwind.example" },
+        { intendedEmail: "support@northwind.example" },
       ),
     ).rejects.toBeInstanceOf(UnexpectedAccountError);
     expect(warnings).toEqual(["google token revoke failed"]);
@@ -220,10 +220,10 @@ describe("oauth.handleCallback", () => {
 
   it("ID token email in different case from intendedEmail still matches", async () => {
     const r = await connect(
-      { ...careers, email: " Careers@SunCulture.IO " },
-      { intendedEmail: "careers@sunculture.io" },
+      { ...support, email: " Support@Northwind.EXAMPLE " },
+      { intendedEmail: "support@northwind.example" },
     );
-    expect(r.connection.email).toBe("careers@sunculture.io");
+    expect(r.connection.email).toBe("support@northwind.example");
   });
 
   it("hd mismatch → UnexpectedAccountError (revoked)", async () => {
@@ -237,13 +237,13 @@ describe("oauth.handleCallback", () => {
   });
 
   it("hd comparison is case-insensitive", async () => {
-    const r = await connect({ ...careers, hd: "SunCulture.IO" });
+    const r = await connect({ ...support, hd: "Northwind.EXAMPLE" });
     expect(r.created).toBe(true);
   });
 
   it("email_verified false → UnexpectedAccountError", async () => {
     await expect(
-      connect({ ...careers, emailVerified: false }),
+      connect({ ...support, emailVerified: false }),
     ).rejects.toBeInstanceOf(UnexpectedAccountError);
     expect(fake.revoked).toHaveLength(1);
   });
@@ -251,7 +251,7 @@ describe("oauth.handleCallback", () => {
   it("user unticks gmail.send → MissingScopeError and token revoked", async () => {
     await expect(
       connect({
-        ...careers,
+        ...support,
         grantScopes: [
           "openid",
           "https://www.googleapis.com/auth/userinfo.email",
@@ -262,7 +262,7 @@ describe("oauth.handleCallback", () => {
   });
 
   it('granted "userinfo.email" alias does not count as missing', async () => {
-    const r = await connect(careers);
+    const r = await connect(support);
     expect(r.connection.scopes).toContain(
       "https://www.googleapis.com/auth/userinfo.email",
     );
@@ -273,7 +273,7 @@ describe("oauth.handleCallback", () => {
 
   it("no refresh token → NoRefreshTokenError, access token revoked", async () => {
     await expect(
-      connect({ ...careers, omitRefreshToken: true }),
+      connect({ ...support, omitRefreshToken: true }),
     ).rejects.toBeInstanceOf(NoRefreshTokenError);
     expect(fake.revoked).toHaveLength(1);
     expect(fake.revoked[0]).toMatch(/^ya29\.fake-access-/);
@@ -282,7 +282,7 @@ describe("oauth.handleCallback", () => {
 
   it("state's tenant is used: a t1 state cannot create a t2 connection", async () => {
     const r = await connect(
-      { sub: "s5", email: "x@sunculture.io", hd: "sunculture.io" },
+      { sub: "s5", email: "x@northwind.example", hd: "northwind.example" },
       { tenantId: "t1" },
     );
     expect(r.tenantId).toBe("t1");
@@ -301,7 +301,7 @@ describe("oauth.handleCallback", () => {
     const g2 = createGoogle({
       store: empty,
       keyProvider: kp,
-      callbackUrl: "https://hrms.io/cb",
+      callbackUrl: "https://app.example.com/cb",
       oauthGateway: fake,
       now,
     });
@@ -317,7 +317,7 @@ describe("oauth.handleCallback", () => {
   });
 
   it("re-connecting the same account keeps the row, reactivates a revoked one, created=false", async () => {
-    const first = await connect(careers, { actorId: "u1" });
+    const first = await connect(support, { actorId: "u1" });
     await store.updateConnectionStatus(
       "t1",
       first.connection.id,
@@ -325,7 +325,7 @@ describe("oauth.handleCallback", () => {
       "disconnected",
     );
     clock = new Date("2026-01-02T00:00:00Z");
-    const second = await connect(careers, { actorId: "u2" });
+    const second = await connect(support, { actorId: "u2" });
     expect(second.created).toBe(false);
     expect(second.actorId).toBe("u2");
     expect(second.connection).toMatchObject({
@@ -341,10 +341,14 @@ describe("oauth.handleCallback", () => {
   });
 
   it("adding scopes to a connection with a different Google account → UnexpectedAccountError", async () => {
-    const first = await connect(careers);
+    const first = await connect(support);
     await expect(
       connect(
-        { sub: "other", email: "other@sunculture.io", hd: "sunculture.io" },
+        {
+          sub: "other",
+          email: "other@northwind.example",
+          hd: "northwind.example",
+        },
         { connectionId: first.connection.id },
       ),
     ).rejects.toBeInstanceOf(UnexpectedAccountError);
@@ -352,15 +356,15 @@ describe("oauth.handleCallback", () => {
   });
 
   it("adding scopes with the same account succeeds", async () => {
-    const first = await connect(careers);
-    const again = await connect(careers, { connectionId: first.connection.id });
+    const first = await connect(support);
+    const again = await connect(support, { connectionId: first.connection.id });
     expect(again.created).toBe(false);
     expect(again.connection.id).toBe(first.connection.id);
   });
 
   it("emits connection.created then connection.scopes_added", async () => {
-    const first = await connect(careers, { actorId: "u1" });
-    await connect(careers, { actorId: "u2" });
+    const first = await connect(support, { actorId: "u1" });
+    await connect(support, { actorId: "u2" });
     expect(events.map((e) => e.type)).toEqual([
       "connection.created",
       "connection.scopes_added",
@@ -369,7 +373,7 @@ describe("oauth.handleCallback", () => {
       tenantId: "t1",
       actorId: "u1",
       connectionId: first.connection.id,
-      email: "careers@sunculture.io",
+      email: "support@northwind.example",
       at: clock,
     });
     expect(events[1]).toMatchObject({
@@ -384,7 +388,7 @@ describe("oauth.handleCallback", () => {
   it("upsertConnection failure → original error rethrown, token revoked", async () => {
     const boom = new Error("db down");
     vi.spyOn(store, "upsertConnection").mockRejectedValueOnce(boom);
-    await expect(connect(careers)).rejects.toBe(boom);
+    await expect(connect(support)).rejects.toBe(boom);
     expect(fake.revoked).toHaveLength(1);
   });
 
@@ -400,7 +404,7 @@ describe("oauth.handleCallback", () => {
       events.length = 0;
       await orig(rec);
     });
-    const err = await connect(careers).catch((e: unknown) => e);
+    const err = await connect(support).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConnectionRevokedError);
     expect(err).toMatchObject({ reason: "client_changed", tenantId: "t1" });
     expect(fake.revoked).toHaveLength(1);
@@ -420,7 +424,7 @@ describe("oauth.handleCallback", () => {
       actorId: "u1",
       services: ["gmail"],
     });
-    const { code, state } = fake.consent(url, careers);
+    const { code, state } = fake.consent(url, support);
     vi.spyOn(kp, "wrap").mockRejectedValueOnce(boom);
     await expect(g.oauth.handleCallback({ code, state })).rejects.toBe(boom);
     expect(fake.revoked).toHaveLength(1);
@@ -430,7 +434,7 @@ describe("oauth.handleCallback", () => {
   it("store lookup failure → original error rethrown, token revoked", async () => {
     const boom = new Error("db down");
     vi.spyOn(store, "findConnectionBySub").mockRejectedValueOnce(boom);
-    await expect(connect(careers)).rejects.toBe(boom);
+    await expect(connect(support)).rejects.toBe(boom);
     expect(fake.revoked).toHaveLength(1);
   });
 
@@ -441,7 +445,7 @@ describe("oauth.handleCallback", () => {
         actorId: "u1",
         services: ["gmail"],
       });
-      return fake.consent(url, careers);
+      return fake.consent(url, support);
     };
     const [a, b] = [await mk(), await mk()];
     const res = await Promise.allSettled([
@@ -461,7 +465,7 @@ describe("oauth.handleCallback", () => {
       actorId: "u1",
       services: ["gmail"],
     });
-    const { code, state } = fake.consent(url, careers);
+    const { code, state } = fake.consent(url, support);
     await g.oauth.handleCallback({ code, state });
     await g.oauth.handleCallback({ code, state }).catch((e) => thrown.push(e));
     await g.oauth
@@ -469,10 +473,10 @@ describe("oauth.handleCallback", () => {
       .catch((e) => thrown.push(e));
     fake.failRevoke(true);
     await connect({ sub: "z", email: "z@gmail.com" }).catch(() => {});
-    await connect({ ...careers, sub: "z2", omitRefreshToken: true }).catch(
+    await connect({ ...support, sub: "z2", omitRefreshToken: true }).catch(
       () => {},
     );
-    await connect({ ...careers, sub: "z3", grantScopes: ["openid"] }).catch(
+    await connect({ ...support, sub: "z3", grantScopes: ["openid"] }).catch(
       () => {},
     );
     expect(thrown.length).toBeGreaterThanOrEqual(4);

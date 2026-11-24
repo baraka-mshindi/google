@@ -23,11 +23,11 @@ const cfg = {
   clientId: "123-abc.apps.googleusercontent.com",
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
-  name: "Careers Team",
+  email: "support@northwind.example",
+  hd: "northwind.example",
+  name: "Support Team",
 };
 
 let store: InMemoryStore;
@@ -44,7 +44,7 @@ const connect = async () => {
     actorId: "u1",
     services: ["gmail"],
   });
-  const { code, state } = fake.consent(url, careers);
+  const { code, state } = fake.consent(url, support);
   return (await g.oauth.handleCallback({ code, state })).connection;
 };
 
@@ -65,7 +65,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -90,7 +90,7 @@ describe("createGmail().send", () => {
     });
     expect(r).toEqual({ messageId: "capture-1", threadId: "capture-1" });
     const m = capture.messages[0]!;
-    expect(m.parsed.from).toBe("careers@sunculture.io");
+    expect(m.parsed.from).toBe("support@northwind.example");
     expect(m.parsed.to).toEqual(["jane@example.com"]);
     expect(m.parsed.cc).toEqual(["c@example.com"]);
     expect(m.parsed.subject).toBe("Offer");
@@ -102,14 +102,14 @@ describe("createGmail().send", () => {
 
   it("fromName overrides displayName", async () => {
     const rec = (await store.getConnection("t1", connId))!;
-    await store.upsertConnection({ ...rec, displayName: "Careers Team" });
+    await store.upsertConnection({ ...rec, displayName: "Support Team" });
     const gm = gmailWith();
     await gm.send(base());
     await gm.send({ ...base(), fromName: "HR Desk" });
     const raws = capture.messages.map((m) => m.raw.toString("utf8"));
-    expect(raws[0]).toContain("Careers Team");
+    expect(raws[0]).toContain("Support Team");
     expect(raws[1]).toContain("HR Desk");
-    expect(raws[1]).not.toContain("Careers Team");
+    expect(raws[1]).not.toContain("Support Team");
   });
 
   it("uses the sanitized fromName: control chars stripped, capped at 100 code points", async () => {
@@ -128,11 +128,11 @@ describe("createGmail().send", () => {
     await g.connections.setDisplayName({
       tenantId: "t1",
       connectionId: connId,
-      displayName: "Careers Team",
+      displayName: "Support Team",
     });
     await gmailWith().send({ ...base(), fromName: "   " });
     const parsed = await simpleParser(capture.messages[0]!.raw);
-    expect(parsed.from!.value[0]!.name).toBe("Careers Team");
+    expect(parsed.from!.value[0]!.name).toBe("Support Team");
   });
 
   it("client_changed while an access token is cached → ConnectionRevokedError, nothing sent (Review Focus 5)", async () => {

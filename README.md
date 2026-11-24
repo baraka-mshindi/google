@@ -1,8 +1,8 @@
 # @mshindi-labs/google
 
 Multi-tenant Google API utilities for TypeScript. Each tenant brings its own Google
-OAuth client; tokens are envelope-encrypted at rest; it sends email through Gmail and books
-interviews on Google Calendar.
+OAuth client; tokens are envelope-encrypted at rest; it sends email through Gmail, books
+appointments on Google Calendar and reads and writes Google Sheets.
 
 **Documentation: https://baraka-mshindi.github.io/google/**
 
@@ -37,7 +37,7 @@ const { url } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail"],
-  intendedEmail: "careers@example.com",
+  intendedEmail: "support@example.com",
 });
 const { connection } = await google.oauth.handleCallback({
   code,
@@ -51,8 +51,8 @@ await gmail.send({
   tenantId,
   actorId,
   connectionId: connection.id,
-  to: ["jane@applicant.com"],
-  subject: "Your application",
+  to: ["jane@customer.example"],
+  subject: "Your order has shipped",
   html: "<p>Hello</p>",
 });
 ```
@@ -71,7 +71,7 @@ own error classes and `instanceof` can be false for a genuine library error.
 
 - [Tenant setup](docs/guides/tenant-setup.md): for a tenant admin creating the Google OAuth client.
 - [Host integration](docs/guides/host-integration.md): wiring, routes, error messages, key providers.
-- [Calendar scheduling](docs/guides/calendar-scheduling.md): idempotent interview booking, reschedule, cancel, free/busy.
+- [Calendar scheduling](docs/guides/calendar-scheduling.md): idempotent booking, reschedule, cancel, free/busy.
 - [Google Sheets](docs/guides/sheets.md): read rows as objects, append without duplicates, atomic batch formatting.
 - [Bulk sending](docs/guides/bulk-sending.md): a queue pattern that never double-sends.
 - [Prisma and TypeORM](docs/guides/orm-integration.md): plugging an ORM into the Postgres store.

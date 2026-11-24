@@ -52,7 +52,7 @@ const { url } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail"],
-  intendedEmail: "careers@example.com",
+  intendedEmail: "support@example.com",
 });
 const { connection } = await google.oauth.handleCallback({
   code,
@@ -66,8 +66,8 @@ await gmail.send({
   tenantId,
   actorId,
   connectionId: connection.id,
-  to: ["jane@applicant.com"],
-  subject: "Your application",
+  to: ["jane@customer.example"],
+  subject: "Your order has shipped",
   html: "<p>Hello</p>",
 });
 ```

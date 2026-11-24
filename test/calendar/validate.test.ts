@@ -6,13 +6,13 @@ import {
   validateCreateInput,
 } from "../../src/calendar/validate.js";
 
-const ORG = "careers@acme.io";
+const ORG = "support@acme.io";
 const ok = (over: Partial<CreateEventInput> = {}): CreateEventInput => ({
   tenantId: "t1",
   connectionId: "c1",
   actorId: "u1",
-  idempotencyKey: "interview-1",
-  title: "Interview",
+  idempotencyKey: "booking-1",
+  title: "Consultation",
   start: new Date("2026-11-10T08:00:00Z"),
   end: new Date("2026-11-10T09:00:00Z"),
   timeZone: "Africa/Nairobi",
@@ -34,7 +34,7 @@ describe("validateCreateInput", () => {
     expect(v.description).toBeNull();
     expect(v.guestsCanSeeOtherGuests).toBe(false);
     expect(v.sendUpdates).toBe("all");
-    expect(v.idempotencyKey).toBe("interview-1");
+    expect(v.idempotencyKey).toBe("booking-1");
   });
 
   it("[RF 3] dedupes case-insensitively and removes the organizer", () => {
@@ -43,7 +43,7 @@ describe("validateCreateInput", () => {
         attendees: [
           { email: "Ann@X.com" },
           { email: "ann@x.com", displayName: "Second" },
-          { email: "CAREERS@acme.io" },
+          { email: "SUPPORT@acme.io" },
         ],
       }),
       ORG,
@@ -53,7 +53,7 @@ describe("validateCreateInput", () => {
   });
 
   it("rejects an organizer-only list", () => {
-    bad({ attendees: [{ email: "Careers@acme.io" }] }, "attendees");
+    bad({ attendees: [{ email: "Support@acme.io" }] }, "attendees");
   });
   it("rejects more than 100 attendees", () => {
     bad(

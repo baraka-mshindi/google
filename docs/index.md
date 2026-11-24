@@ -19,7 +19,7 @@ features:
   - title: Envelope encryption
     details: Client secrets and refresh tokens are AES-256-GCM encrypted with per-value keys, wrapped by a KeyProvider. Static keys for development, GCP or AWS KMS in production.
   - title: Gmail, Calendar and Sheets
-    details: Send mail as a connected mailbox, book and reschedule interviews idempotently, and read or append spreadsheet rows, each from its own entry point.
+    details: Send mail as a connected mailbox, book and reschedule appointments idempotently, and read or append spreadsheet rows, each from its own entry point.
   - title: Postgres store, or bring your own
     details: A ready Postgres credential store with migrations, adapters for Prisma and TypeORM, and optional row-level security for tenant isolation.
   - title: Least privilege
