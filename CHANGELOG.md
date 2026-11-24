@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/baraka-mshindi/google/compare/google-v1.3.2...google-v1.4.0) (2026-11-24)
+
+
+### Features
+
+* **sheets:** read and write spreadsheets as a service account ([6b6886a](https://github.com/baraka-mshindi/google/commit/6b6886a861bfc56e47f74b503c593f3940a6ed69))
+* **sheets:** read and write spreadsheets as a service account ([e9d5c92](https://github.com/baraka-mshindi/google/commit/e9d5c92c5ece273996cc199c4f6d840d5a0f241f))
+
 ## [1.3.2](https://github.com/baraka-mshindi/google/compare/google-v1.3.1...google-v1.3.2) (2026-11-24)
 
 ### Documentation
