@@ -7,3 +7,4 @@ dist/
 # docs site
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+docs/superpowers/
