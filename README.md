@@ -4,6 +4,8 @@ Multi-tenant Google API utilities for TypeScript. Each tenant brings its own Goo
 OAuth client; tokens are envelope-encrypted at rest; it sends email through Gmail and books
 interviews on Google Calendar.
 
+**Documentation: https://baraka-mshindi.github.io/google/**
+
 ```sh
 npm i @mshindi-labs/google @googleapis/gmail nodemailer html-to-text
 npm i @mshindi-labs/google @googleapis/sheets@^14   # Sheets, on Node 18 / 20

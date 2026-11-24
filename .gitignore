@@ -3,3 +3,7 @@ dist/
 *.env
 .env*
 .superpowers/
+
+# docs site
+docs/.vitepress/dist/
+docs/.vitepress/cache/
