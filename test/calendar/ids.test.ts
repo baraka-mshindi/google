@@ -3,7 +3,7 @@ import { deriveEventId, fingerprint } from "../../src/calendar/ids.js";
 import type { NormalizedEvent } from "../../src/calendar/validate.js";
 
 const base = (): NormalizedEvent => ({
-  title: "Interview",
+  title: "Consultation",
   description: null,
   start: new Date("2026-11-10T08:00:00Z"),
   end: new Date("2026-11-10T09:00:00Z"),

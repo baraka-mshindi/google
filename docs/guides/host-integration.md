@@ -64,7 +64,7 @@ const { url } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail"],
-  intendedEmail: "careers@example.com", // recommended: reject the wrong account
+  intendedEmail: "support@example.com", // recommended: reject the wrong account
   // connectionId: "...",               // add scopes to an existing connection
 });
 // redirect the admin to `url`
@@ -170,11 +170,14 @@ const { messageId, threadId } = await gmail.send({
   tenantId,
   connectionId,
   actorId,
-  fromName: "SunCulture Careers",
-  to: ["jane@applicant.com", { name: "Wanjirũ", address: "w@applicant.com" }],
-  subject: "Your application ✅",
+  fromName: "Northwind Support",
+  to: [
+    "jane@customer.example",
+    { name: "Wanjirũ", address: "w@customer.example" },
+  ],
+  subject: "Your order has shipped ✅",
   html: "<p>Hello</p>", // text is generated from html if omitted
-  headers: { "X-Hrms-Application-Id": "app_123" },
+  headers: { "X-App-Order-Id": "order_123" },
 });
 ```
 
@@ -219,8 +222,8 @@ Every library error extends `GoogleLibError` with a stable `code`.
 | `invalid_config`              | `InvalidConfigError`                      | Deployment or input bug (for example a malformed client ID).                   |
 
 `SendOutcomeUnknownError` means the request may have reached Gmail (a timeout or reset
-after the request was written, or a 5xx). **Do not auto-retry it**: that can email an
-applicant twice. Send it to manual review.
+after the request was written, or a 5xx). **Do not auto-retry it**: that can email a
+recipient twice. Send it to manual review.
 
 ## 9. Events
 

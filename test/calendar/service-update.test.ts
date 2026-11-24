@@ -22,11 +22,11 @@ const cfg = {
   clientId: "123-abc.apps.googleusercontent.com",
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
-  name: "Careers Team",
+  email: "support@northwind.example",
+  hd: "northwind.example",
+  name: "Support Team",
 };
 
 let store: InMemoryStore;
@@ -58,15 +58,15 @@ const createInput = (
   tenantId: "t1",
   connectionId: connId,
   actorId: "u1",
-  idempotencyKey: "interview-42",
-  title: "Interview: Jane Doe",
-  description: "Panel interview",
+  idempotencyKey: "booking-42",
+  title: "Consultation: Jane Doe",
+  description: "Initial consultation",
   start: D("2030-01-07T09:00:00Z"),
   end: D("2030-01-07T10:00:00Z"),
   timeZone: "Africa/Nairobi",
   attendees: [
-    { email: "jane@applicant.com", displayName: "Jane Doe" },
-    { email: "panel@sunculture.io", optional: true },
+    { email: "jane@customer.example", displayName: "Jane Doe" },
+    { email: "host@northwind.example", optional: true },
   ],
   meeting: { type: "in_person", location: "HQ, Room 4" },
   ...over,
@@ -102,7 +102,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -120,10 +120,10 @@ beforeEach(async () => {
     actorId: "u1",
     services: ["gmail", "calendar"],
   });
-  const { code, state } = fake.consent(url, careers);
+  const { code, state } = fake.consent(url, support);
   connId = (await g.oauth.handleCallback({ code, state })).connection.id;
   events.length = 0;
-  cal = new FakeCalendar({ organizerEmail: careers.email });
+  cal = new FakeCalendar({ organizerEmail: support.email });
 });
 
 describe("toNormalized", () => {
@@ -132,18 +132,18 @@ describe("toNormalized", () => {
     const stored = cal.events.get(id)!;
     const n = toNormalized(stored);
     expect(n).toEqual({
-      title: "Interview: Jane Doe",
-      description: "Panel interview",
+      title: "Consultation: Jane Doe",
+      description: "Initial consultation",
       start: D("2030-01-07T09:00:00Z"),
       end: D("2030-01-07T10:00:00Z"),
       timeZone: "Africa/Nairobi",
       attendees: [
         {
-          email: "jane@applicant.com",
+          email: "jane@customer.example",
           displayName: "Jane Doe",
           optional: false,
         },
-        { email: "panel@sunculture.io", displayName: null, optional: true },
+        { email: "host@northwind.example", displayName: null, optional: true },
       ],
       meeting: { type: "in_person", location: "HQ, Room 4" },
       guestsCanSeeOtherGuests: false,
@@ -160,7 +160,7 @@ describe("toNormalized", () => {
       start: { dateTime: "2030-01-07T09:00:00Z", timeZone: "UTC" },
       end: { dateTime: "2030-01-07T10:00:00Z", timeZone: "UTC" },
       attendees: [
-        { email: "careers@sunculture.io", organizer: true, self: true },
+        { email: "support@northwind.example", organizer: true, self: true },
         { email: "a@b.com", responseStatus: "accepted" },
       ],
       conferenceData: { conferenceSolution: { key: { type: "hangoutsMeet" } } },
@@ -194,7 +194,7 @@ describe("updateEvent — reschedule", () => {
       timeZone: "Africa/Nairobi",
     });
     const priv = stored.extendedProperties?.private;
-    expect(priv?.mshindiKey).toBe("interview-42");
+    expect(priv?.mshindiKey).toBe("booking-42");
     expect(priv?.mshindiTenant).toBe("t1");
     expect(priv?.mshindiFingerprint).toBe(fingerprint(toNormalized(stored)));
     const upd = ofType("calendar_event.updated");
@@ -204,7 +204,7 @@ describe("updateEvent — reschedule", () => {
       actorId: "u1",
       connectionId: connId,
       eventId: id,
-      title: "Interview: Jane Doe",
+      title: "Consultation: Jane Doe",
       start: D("2030-01-08T09:00:00Z"),
       end: D("2030-01-08T10:00:00Z"),
       changed: ["end", "start"],
@@ -228,7 +228,7 @@ describe("updateEvent — reschedule", () => {
     await createCalendar(g, { transport, sleep: async () => {} }).updateEvent({
       ...ids(id),
       changes: {
-        title: "Interview: Jane Doe (rescheduled)",
+        title: "Consultation: Jane Doe (rescheduled)",
         start: D("2030-01-07T09:00:00Z"),
         guestsCanSeeOtherGuests: false,
       },
@@ -266,7 +266,7 @@ describe("updateEvent — reschedule", () => {
     stored.attendees![0]!.responseStatus = "accepted";
     stored.attendees![1]!.responseStatus = "declined";
     stored.attendees!.unshift({
-      email: careers.email,
+      email: support.email,
       organizer: true,
       self: true,
       responseStatus: "accepted",
@@ -275,21 +275,21 @@ describe("updateEvent — reschedule", () => {
       ...ids(id),
       changes: {
         attendees: [
-          { email: "Jane@Applicant.com", displayName: "Jane Doe" },
-          { email: "new@applicant.com" },
+          { email: "Jane@Customer.example", displayName: "Jane Doe" },
+          { email: "new@customer.example" },
         ],
       },
     });
     // RSVPs match case-insensitively; the caller's spelling is what is sent.
     expect(v.attendees).toEqual([
       {
-        email: "Jane@applicant.com",
+        email: "Jane@customer.example",
         displayName: "Jane Doe",
         optional: false,
         response: "accepted",
       },
       {
-        email: "new@applicant.com",
+        email: "new@customer.example",
         displayName: null,
         optional: false,
         response: "needs_action",
@@ -297,15 +297,15 @@ describe("updateEvent — reschedule", () => {
     ]);
     const after = cal.events.get(id)!.attendees!;
     expect(
-      after.find((a) => a.email === "new@applicant.com"),
+      after.find((a) => a.email === "new@customer.example"),
     ).not.toHaveProperty("responseStatus");
-    expect(after.some((a) => a.email === "panel@sunculture.io")).toBe(false);
+    expect(after.some((a) => a.email === "host@northwind.example")).toBe(false);
     // The organizer's own attendee entry survives.
-    expect(after[0]).toMatchObject({ email: careers.email, organizer: true });
+    expect(after[0]).toMatchObject({ email: support.email, organizer: true });
     expect(kinds("update")).toHaveLength(1);
     expect(ofType("calendar_event.updated")[0]).toMatchObject({
       changed: ["attendees"],
-      attendees: ["Jane@applicant.com", "new@applicant.com"],
+      attendees: ["Jane@customer.example", "new@customer.example"],
     });
   });
 
@@ -314,10 +314,13 @@ describe("updateEvent — reschedule", () => {
     const v = await svc().updateEvent({
       ...ids(id),
       changes: {
-        attendees: [{ email: "jane@applicant.com" }, { email: careers.email }],
+        attendees: [
+          { email: "jane@customer.example" },
+          { email: support.email },
+        ],
       },
     });
-    expect(v.attendees.map((a) => a.email)).toEqual(["jane@applicant.com"]);
+    expect(v.attendees.map((a) => a.email)).toEqual(["jane@customer.example"]);
   });
 
   it("sendUpdates none → no notification; external_only maps", async () => {
@@ -337,7 +340,7 @@ describe("updateEvent — reschedule", () => {
       "externalOnly",
     ]);
     expect(kinds("update")).toEqual([
-      { eventId: id, kind: "update", to: ["jane@applicant.com"] },
+      { eventId: id, kind: "update", to: ["jane@customer.example"] },
     ]);
   });
 });
@@ -349,10 +352,10 @@ describe("updateEvent — no-op", () => {
       ...ids(id),
       changes: {
         start: D("2030-01-07T09:00:00Z"),
-        title: "Interview: Jane Doe",
+        title: "Consultation: Jane Doe",
         attendees: [
-          { email: "panel@sunculture.io", optional: true },
-          { email: "jane@applicant.com", displayName: "Jane Doe" },
+          { email: "host@northwind.example", optional: true },
+          { email: "jane@customer.example", displayName: "Jane Doe" },
         ],
       },
     });
@@ -617,8 +620,8 @@ describe("cancelEvent", () => {
       actorId: "u1",
       connectionId: connId,
       eventId: id,
-      title: "Interview: Jane Doe",
-      attendees: ["jane@applicant.com", "panel@sunculture.io"],
+      title: "Consultation: Jane Doe",
+      attendees: ["jane@customer.example", "host@northwind.example"],
       start: D("2030-01-07T09:00:00Z"),
       end: D("2030-01-07T10:00:00Z"),
     });
@@ -702,7 +705,7 @@ describe("cancelEvent", () => {
 describe("updateEvent — fix round 1", () => {
   it("hand-edited time, host asks for the original time → applied: one patch, one update", async () => {
     const id = await booked();
-    // A recruiter moved the event 09:00 → 10:00 in Google's UI (fingerprint untouched).
+    // A staff member moved the event 09:00 → 10:00 in Google's UI (fingerprint untouched).
     const stored = cal.events.get(id)!;
     stored.start = {
       dateTime: "2030-01-07T10:00:00.000Z",
@@ -738,8 +741,8 @@ describe("updateEvent — fix round 1", () => {
       ...ids(id),
       changes: {
         attendees: [
-          { email: "jane@applicant.com", displayName: "Jane A. Doe" },
-          { email: "panel@sunculture.io", optional: true },
+          { email: "jane@customer.example", displayName: "Jane A. Doe" },
+          { email: "host@northwind.example", optional: true },
         ],
       },
     });
@@ -756,8 +759,8 @@ describe("updateEvent — fix round 1", () => {
       ...ids(id),
       changes: {
         attendees: [
-          { email: "jane@applicant.com" },
-          { email: "panel@sunculture.io", optional: true },
+          { email: "jane@customer.example" },
+          { email: "host@northwind.example", optional: true },
         ],
       },
     });
@@ -770,7 +773,7 @@ describe("updateEvent — fix round 1", () => {
     cal.failNext("patch", net("ECONNRESET"), { afterApply: true });
     await svc().updateEvent({
       ...ids(id),
-      changes: { attendees: [{ email: "new@applicant.com" }] },
+      changes: { attendees: [{ email: "new@customer.example" }] },
     });
     expect(ops()).toEqual(["get:", "patch:all", "get:"]);
     expect(kinds("update")).toHaveLength(1);
@@ -787,13 +790,13 @@ describe("updateEvent — fix round 1", () => {
       ...ids(id),
       changes: {
         attendees: [
-          { email: "jane@applicant.com", optional: true },
-          { email: "new@applicant.com" },
+          { email: "jane@customer.example", optional: true },
+          { email: "new@customer.example" },
         ],
       },
     });
     expect(cal.events.get(id)!.attendees![0]).toEqual({
-      email: "jane@applicant.com",
+      email: "jane@customer.example",
       displayName: "Jane Doe",
       optional: true,
       responseStatus: "tentative",

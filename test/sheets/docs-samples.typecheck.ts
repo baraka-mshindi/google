@@ -14,11 +14,11 @@ declare const tenantId: string;
 declare const actorId: string;
 declare const connectionId: string;
 declare const sheet: SpreadsheetHandle;
-declare const applicant: {
+declare const customer: {
   id: string;
   name: string;
   email: string;
-  appliedAt: string;
+  signedUpAt: string;
 };
 
 // §1 Set up
@@ -27,7 +27,7 @@ export async function setUp() {
     tenantId,
     actorId,
     services: ["gmail", "calendar", "sheets"],
-    intendedEmail: "careers@example.com",
+    intendedEmail: "reports@example.com",
     connectionId, // add scopes to the existing connection
   });
   const sheets = createSheets(google);
@@ -71,28 +71,28 @@ export async function info() {
 
 // §3 Read: values
 export async function readValues() {
-  const grid = await sheet.getValues({ tab: "Applicants", range: "A1:D20" });
-  const raw = await sheet.getValues("Applicants!E2:E50", {
+  const grid = await sheet.getValues({ tab: "Customers", range: "A1:D20" });
+  const raw = await sheet.getValues("Customers!E2:E50", {
     valueRender: "unformatted",
   });
-  const lastRow = (await sheet.getValues({ tab: "Applicants" })).length;
+  const lastRow = (await sheet.getValues({ tab: "Customers" })).length;
   return { grid, raw, lastRow };
 }
 
 // §3 Rows as objects
 export async function rowsAsObjects() {
-  const panels = await sheet.getRows("Interview panels");
+  const staff = await sheet.getRows("Staff");
 
-  for (const { rowNumber, data } of panels) {
-    console.log(rowNumber, data["Panelist"], data["Email"]);
+  for (const { rowNumber, data } of staff) {
+    console.log(rowNumber, data["Name"], data["Email"]);
   }
 }
 
 // §3 Find rows
 export async function findRows() {
-  const hits = await sheet.findRows("Applicants", {
+  const hits = await sheet.findRows("Customers", {
     column: { header: "Email" }, // or a letter: "C"
-    where: (value) => String(value).toLowerCase() === "jane@applicant.com",
+    where: (value) => String(value).toLowerCase() === "jane@customer.example",
   });
 
   for (const { rowNumber, values } of hits) {
@@ -102,19 +102,19 @@ export async function findRows() {
 
 // §4 Write
 export async function write() {
-  await sheet.update({ tab: "Applicants", range: "A2" }, [
-    ["Jane Doe", "jane@applicant.com", 42, true, null],
+  await sheet.update({ tab: "Customers", range: "A2" }, [
+    ["Jane Doe", "jane@customer.example", 42, true, null],
   ]);
 
   await sheet.update("Report!A1", [["2026-12-01", "50%"]], {
     input: "user_entered",
   });
 
-  await sheet.update({ tab: "Applicants", range: "A2" }, [
+  await sheet.update({ tab: "Customers", range: "A2" }, [
     [
-      applicant.name, // literal, even if it starts with "="
+      customer.name, // literal, even if it starts with "="
       {
-        formula: `=HYPERLINK("https://hrms.example.com/people/${applicant.id}", "Profile")`,
+        formula: `=HYPERLINK("https://app.example.com/customers/${customer.id}", "Profile")`,
       },
     ],
   ]);
@@ -122,23 +122,23 @@ export async function write() {
 
 // §5 Appending safely
 export async function appendSafely() {
-  const { range, firstRow, lastRow } = await sheet.append("Applicants", [
-    [applicant.name, applicant.email, applicant.appliedAt],
+  const { range, firstRow, lastRow } = await sheet.append("Customers", [
+    [customer.name, customer.email, customer.signedUpAt],
   ]);
   return { range, firstRow, lastRow };
 }
 
-export async function appendApplicant(email: string, row: string[]) {
+export async function appendCustomer(email: string, row: string[]) {
   try {
-    await sheet.append("Applicants", [row]);
+    await sheet.append("Customers", [row]);
   } catch (err) {
     if (!(err instanceof SheetsWriteOutcomeUnknownError)) throw err;
 
     // The outcome is unknown. Read the tail before trying again.
-    const column = await sheet.getValues({ tab: "Applicants", range: "B:B" });
+    const column = await sheet.getValues({ tab: "Customers", range: "B:B" });
     const tail = column.slice(-20).flat();
     if (!tail.includes(email)) {
-      await sheet.append("Applicants", [row]); // it did not land
+      await sheet.append("Customers", [row]); // it did not land
     }
   }
 }
@@ -189,8 +189,8 @@ export async function batch() {
 export async function testing() {
   const fake = new FakeSheets({
     spreadsheetId: "sheet-1",
-    title: "Hiring",
-    tabs: [{ title: "Applicants", rows: [["Name", "Email"]] }],
+    title: "Customer export",
+    tabs: [{ title: "Customers", rows: [["Name", "Email"]] }],
   });
   const sheets = createSheets(google, { transport: fake });
   const sheet = sheets.open({
@@ -199,14 +199,14 @@ export async function testing() {
     spreadsheetId: "sheet-1",
   });
 
-  await sheet.append("Applicants", [["Jane Doe", "jane@applicant.com"]]);
+  await sheet.append("Customers", [["Jane Doe", "jane@customer.example"]]);
 
-  expect(fake.values("Applicants")).toEqual([
+  expect(fake.values("Customers")).toEqual([
     ["Name", "Email"],
-    ["Jane Doe", "jane@applicant.com"],
+    ["Jane Doe", "jane@customer.example"],
   ]);
 
-  fake.formulaAt("Applicants", "C2");
+  fake.formulaAt("Customers", "C2");
   fake.failNext(
     "valuesAppend",
     Object.assign(new Error("reset"), { code: "ECONNRESET" }),

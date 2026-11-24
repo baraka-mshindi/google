@@ -11,14 +11,14 @@ cannot use the **Internal** setting in step 3.
 
 1. Go to <https://console.cloud.google.com> and sign in as a Workspace administrator.
 2. Open the project picker at the top and choose **New project**.
-3. Name it (for example "Careers email") and make sure the **Organization** is your
+3. Name it (for example "Support email") and make sure the **Organization** is your
    company. Choose **Create**.
 
 ## 2. Turn on the Gmail API (and the Calendar API)
 
 1. With the new project selected, open **APIs & Services > Library**.
 2. Search for **Gmail API**, open it and choose **Enable**.
-3. If the application will also book interviews on a calendar, do the same for
+3. If the application will also book appointments on a calendar, do the same for
    **Google Calendar API**.
 
 ## 3. Set up the OAuth consent screen as Internal
@@ -56,7 +56,7 @@ cannot use the **Internal** setting in step 3.
 2. Paste the **Client ID** and **Client secret** and save. The secret is encrypted and
    is never shown again. Only its last few characters are displayed.
 3. Choose **Connect**, sign in as the mailbox that should send email (for example
-   `careers@yourcompany.com`), and approve the request to **send email on your behalf**. If calendar booking is
+   `support@yourcompany.com`), and approve the request to **send email on your behalf**. If calendar booking is
    enabled, you are also asked to **manage events on calendars you own** and to **see
    free/busy information**. A mailbox that was connected for email only must go through
    Connect again to add the calendar permissions.

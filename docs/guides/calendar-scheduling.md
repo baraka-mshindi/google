@@ -1,8 +1,8 @@
-# Scheduling interviews with Google Calendar
+# Scheduling with Google Calendar
 
-How to book, reschedule and cancel interviews as a connected Google Workspace mailbox
-using `@mshindi-labs/google/calendar`. The examples follow an HRMS interview flow;
-adapt the names to your application.
+How to book, reschedule and cancel appointments as a connected Google Workspace mailbox
+using `@mshindi-labs/google/calendar`. The examples book a customer appointment with two
+staff members; adapt the names to your application.
 
 The service only touches events it created itself. Every event is stamped with a
 private marker and the tenant id, and a read or change of anything else (or of another
@@ -37,7 +37,7 @@ const { url } = await google.oauth.createAuthUrl({
   tenantId,
   actorId,
   services: ["gmail", "calendar"],
-  intendedEmail: "careers@example.com",
+  intendedEmail: "bookings@example.com",
   connectionId, // add scopes to the existing connection
 });
 ```
@@ -55,7 +55,7 @@ const calendar = createCalendar(google);
 
 The mailbox you connect is the organizer. Events are created on its primary calendar.
 
-## 2. The interview flow
+## 2. The booking flow
 
 ### Find a time
 
@@ -64,7 +64,7 @@ const { slots, unknownAttendees } = await calendar.suggestSlots({
   tenantId,
   actorId,
   connectionId,
-  attendees: ["panelist1@example.com", "panelist2@example.com"],
+  attendees: ["staff1@example.com", "staff2@example.com"],
   window: {
     start: new Date("2026-12-01T00:00:00Z"),
     end: new Date("2026-12-08T00:00:00Z"),
@@ -97,36 +97,36 @@ const event = await calendar.createEvent({
   tenantId,
   actorId,
   connectionId,
-  idempotencyKey: interview.id,
-  title: "Interview: Jane Doe, Backend Engineer",
+  idempotencyKey: appointment.id,
+  title: "Consultation: Jane Doe",
   start: slot.start,
   end: slot.end,
   timeZone: "Africa/Nairobi",
   attendees: [
-    { email: "jane@applicant.com", displayName: "Jane Doe" },
-    { email: "panelist1@example.com" },
-    { email: "panelist2@example.com", optional: true },
+    { email: "jane@customer.example", displayName: "Jane Doe" },
+    { email: "staff1@example.com" },
+    { email: "staff2@example.com", optional: true },
   ],
   meeting: { type: "google_meet" }, // or { type: "in_person", location: "HQ, 4th floor" }
   guestsCanSeeOtherGuests: false,
 });
 
-await db.interviews.update(interview.id, { eventId: event.eventId });
+await db.appointments.update(appointment.id, { eventId: event.eventId });
 ```
 
 Store `event.eventId`. It is your handle for every later call. `event.created` is
 `false` when the call was a replay of an earlier one.
 
-**The idempotency key** is your interview row id. Calling `createEvent` again with the
+**The idempotency key** is your appointment row id. Calling `createEvent` again with the
 same key never creates a second event and never re-sends invitations, so it is safe to
 retry after a timeout, a crash or a double-click, even from two servers at once.
 
 - A replay with the same key and the same details returns the existing event.
 - The same key with **different** details throws `EventConflictError`
   (`event_conflict`). To change an event that exists, call `updateEvent`.
-- **Re-booking a cancelled interview needs a new key.** A cancelled event still owns its
+- **Re-booking a cancelled appointment needs a new key.** A cancelled event still owns its
   key; reusing it throws `event_conflict`. Mint a fresh key (for example
-  `${interview.id}:2`) for the new booking.
+  `${appointment.id}:2`) for the new booking.
 - Retrying the **original** `createEvent` after the event was rescheduled also throws
   `event_conflict` (its details no longer match). Treat it as "already booked" and read
   the event with `getEvent`.
@@ -139,7 +139,7 @@ exists. So guests never receive an invitation with no link.
 If Google cannot create the conference, the event is withdrawn silently (nobody was
 emailed) and the call throws `ConferencingUnavailableError`
 (`conferencing_unavailable`). Retry with a **new** idempotency key, or fall back to an
-in-person or phone interview.
+in-person or phone appointment.
 
 If that withdrawal itself fails (the cleanup delete errors too), the error is still
 `ConferencingUnavailableError` and a warning is logged, but a pending event may remain on
@@ -160,7 +160,7 @@ const view = await calendar.getEvent({ tenantId, connectionId, eventId });
 // view.status: "confirmed" | "tentative" | "cancelled"
 ```
 
-Call `getEvent` when the interview page opens. RSVP status is pull-only: there are no
+Call `getEvent` when the appointment page opens. RSVP status is pull-only: there are no
 webhooks, so nothing updates until you ask. `view.meeting` carries the `meetUrl`
 (it is `null` if the link is not ready).
 
@@ -190,7 +190,7 @@ changes.
 - **Switching to Meet** on update notifies guests immediately and does not roll back if
   the link fails: the call succeeds and `meeting.meetUrl` is `null`. Request
   `google_meet` again to repair it.
-- **Last writer wins** between two concurrent updates. Serialize updates per interview
+- **Last writer wins** between two concurrent updates. Serialize updates per appointment
   in your application if that matters.
 - An update on a cancelled event throws `EventCancelledError` (`event_cancelled`).
 
@@ -205,9 +205,9 @@ notifies guests.
 
 ## 3. Guest list visibility
 
-`guestsCanSeeOtherGuests` defaults to **`false`**: a candidate sees themself and the
-organizer, not the panel. This also hides the panelists **from each other**, so
-panelists cannot see who else is interviewing.
+`guestsCanSeeOtherGuests` defaults to **`false`**: a customer sees themself and the
+organizer, not the staff invited. This also hides the other guests **from each other**,
+so no guest can see who else is invited.
 
 This is a user-interface setting in Google Calendar, not a security boundary. A guest
 can still see the invitation emails sent to them, and Google may reveal other guests in
@@ -274,8 +274,8 @@ Pass it to `createCalendar` so tests never call Google:
 import { createCalendar } from "@mshindi-labs/google/calendar";
 import { FakeCalendar } from "@mshindi-labs/google/testing";
 
-const cal = new FakeCalendar({ organizerEmail: "careers@example.com" });
-cal.setFreeBusy("panelist1@example.com", [
+const cal = new FakeCalendar({ organizerEmail: "bookings@example.com" });
+cal.setFreeBusy("staff1@example.com", [
   { start: "2026-12-01T09:00:00Z", end: "2026-12-01T10:00:00Z" },
 ]);
 const calendar = createCalendar(google, { transport: cal });

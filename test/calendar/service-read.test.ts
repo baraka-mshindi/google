@@ -21,11 +21,11 @@ const cfg = {
   clientId: "123-abc.apps.googleusercontent.com",
   clientSecret: "GOCSPX-abcdx7Qa",
 };
-const careers = {
+const support = {
   sub: "s1",
-  email: "careers@sunculture.io",
-  hd: "sunculture.io",
-  name: "Careers Team",
+  email: "support@northwind.example",
+  hd: "northwind.example",
+  name: "Support Team",
 };
 
 let store: InMemoryStore;
@@ -37,7 +37,7 @@ let connId: string;
 
 const connect = async (
   services: ("gmail" | "calendar")[],
-  identity: typeof careers = careers,
+  identity: typeof support = support,
 ) => {
   const { url } = await g.oauth.createAuthUrl({
     tenantId: "t1",
@@ -75,7 +75,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -93,8 +93,8 @@ describe("scopes", () => {
     const gmailOnly = (
       await connect(["gmail"], {
         sub: "s2",
-        email: "hr@sunculture.io",
-        hd: "sunculture.io",
+        email: "admin@northwind.example",
+        hd: "northwind.example",
         name: "HR",
       })
     ).id;
@@ -253,12 +253,12 @@ describe("getEvent", () => {
   const stamped = (tenant: string): GEvent => ({
     id: "e1",
     status: "confirmed",
-    summary: "Interview",
+    summary: "Consultation",
     location: "HQ",
     start: { dateTime: "2030-01-07T10:00:00Z", timeZone: "UTC" },
     end: { dateTime: "2030-01-07T11:00:00Z", timeZone: "UTC" },
     attendees: [
-      { email: "careers@sunculture.io", organizer: true, self: true },
+      { email: "support@northwind.example", organizer: true, self: true },
       { email: "ann@example.com", responseStatus: "needsAction" },
     ],
     extendedProperties: {
@@ -273,7 +273,7 @@ describe("getEvent", () => {
     const v = await svc().getEvent(ids());
     expect(v).toMatchObject({
       eventId: "e1",
-      title: "Interview",
+      title: "Consultation",
       meeting: { type: "in_person", location: "HQ" },
       attendees: [
         {

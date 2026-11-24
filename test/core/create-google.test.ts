@@ -7,11 +7,11 @@ import { LocalKeyProvider } from "../../src/testing/local-key-provider.js";
 const base = () => ({
   store: new InMemoryStore(),
   keyProvider: new LocalKeyProvider(),
-  callbackUrl: "https://hrms.io/cb",
+  callbackUrl: "https://app.example.com/cb",
 });
 
 describe("createGoogle", () => {
-  it.each(["http://hrms.io/cb", "not a url", "ftp://localhost/cb"])(
+  it.each(["http://app.example.com/cb", "not a url", "ftp://localhost/cb"])(
     "rejects callbackUrl %s",
     (u) =>
       expect(() => createGoogle({ ...base(), callbackUrl: u })).toThrow(
@@ -23,7 +23,7 @@ describe("createGoogle", () => {
     "http://localhost:3000/cb",
     "http://127.0.0.1/cb",
     "http://[::1]:3000/cb",
-    "https://hrms.io/cb",
+    "https://app.example.com/cb",
   ])("accepts %s", (u) =>
     expect(() => createGoogle({ ...base(), callbackUrl: u })).not.toThrow(),
   );
@@ -32,7 +32,7 @@ describe("createGoogle", () => {
     const now = () => new Date(42);
     const g = createGoogle({ ...base(), now });
     expect(g[internals].now()).toEqual(new Date(42));
-    expect(g[internals].callbackUrl).toBe("https://hrms.io/cb");
+    expect(g[internals].callbackUrl).toBe("https://app.example.com/cb");
   });
 
   it("wires a real connections api and token manager", async () => {

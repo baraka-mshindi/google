@@ -18,8 +18,8 @@ const cfg = {
 };
 const ops = {
   sub: "s1",
-  email: "ops@sunculture.io",
-  hd: "sunculture.io",
+  email: "ops@northwind.example",
+  hd: "northwind.example",
   name: "Ops Team",
 };
 
@@ -61,7 +61,7 @@ beforeEach(async () => {
   g = createGoogle({
     store,
     keyProvider: new LocalKeyProvider(),
-    callbackUrl: "https://hrms.io/cb",
+    callbackUrl: "https://app.example.com/cb",
     oauthGateway: fake,
     onEvent: (e) => {
       events.push(e);
@@ -78,8 +78,8 @@ describe("withConnectionToken", () => {
     const gmailOnly = (
       await connect(["gmail"], {
         sub: "s2",
-        email: "hr@sunculture.io",
-        hd: "sunculture.io",
+        email: "admin@northwind.example",
+        hd: "northwind.example",
         name: "HR",
       })
     ).id;
