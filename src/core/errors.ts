@@ -295,3 +295,20 @@ export class SheetsWriteOutcomeUnknownError extends GoogleLibError {
     super("sheets_write_outcome_unknown", message, opts);
   }
 }
+
+/**
+ * Google refused the service account: its token request was denied (bad or
+ * deleted key, disabled account, wrong clock) or a freshly minted token was
+ * rejected. Retrying does not help; fix the key or the account.
+ */
+export class ServiceAccountRejectedError extends GoogleLibError {
+  readonly clientEmail: string;
+  constructor(
+    clientEmail: string,
+    message = "Google rejected the service account's credentials",
+    opts?: GoogleErrorOptions,
+  ) {
+    super("service_account_rejected", message, opts);
+    this.clientEmail = clientEmail;
+  }
+}

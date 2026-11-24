@@ -1,8 +1,12 @@
 const REDACTED = "[REDACTED]";
 
-/** Strips known secret shapes (tokens, client secrets, OAuth codes) from text. */
+/** Strips known secret shapes (tokens, client secrets, OAuth codes, PEM private keys) from text. */
 export function redact(text: string): string {
   return text
+    .replace(
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+      REDACTED,
+    )
     .replace(/ya29\.[\w.-]+/g, REDACTED)
     .replace(/1\/\/[\w-]+/g, REDACTED)
     .replace(/GOCSPX-[\w-]+/g, REDACTED)

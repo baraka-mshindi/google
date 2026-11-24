@@ -1,9 +1,13 @@
 import type { sheets_v4 } from "@googleapis/sheets";
 import type { GoogleCore } from "../core/create-google.js";
 import {
+  GoogleApiError,
+  GoogleLibError,
   InvalidSheetsInputError,
+  ServiceAccountRejectedError,
   SheetTabNotFoundError,
 } from "../core/errors.js";
+import type { AccessTokenSource } from "../core/service-account.js";
 import { withConnectionToken } from "../core/with-token.js";
 import { a1 } from "./a1.js";
 import { encodeRows } from "./cells.js";
@@ -203,6 +207,10 @@ function isSheetsRequest(r: unknown): r is SheetsRequest {
   );
 }
 
+/** Runs `fn` with an access token, refreshing and retrying once on a 401. */
+type WithToken = <T>(fn: (accessToken: string) => Promise<T>) => Promise<T>;
+type Ids = { tenantId?: string; connectionId?: string };
+
 /**
  * Creates the Sheets service. `open()` returns a handle on one spreadsheet as one
  * of a tenant's connections; every handle call fetches its own token, checks the
@@ -212,6 +220,76 @@ export function createSheets(
   google: GoogleCore,
   opts: SheetsOptions = {},
 ): SheetsApi {
+  const handle = handleFactory(opts);
+  function open(input: OpenInput): SpreadsheetHandle {
+    const tenantId = requireId(input, "tenantId");
+    const connectionId = requireId(input, "connectionId");
+    const spreadsheetId = requireId(input, "spreadsheetId");
+    return handle(spreadsheetId, { tenantId, connectionId }, (fn) =>
+      withConnectionToken(
+        google,
+        {
+          tenantId,
+          connectionId,
+          service: "sheets",
+          isUnauthorized: (e) => e instanceof SheetsUnauthorizedSignal,
+        },
+        (accessToken) => fn(accessToken),
+      ),
+    );
+  }
+  return { open };
+}
+
+export type ServiceAccountOpenInput = { spreadsheetId: string };
+export type ServiceAccountSheetsApi = {
+  open(input: ServiceAccountOpenInput): SpreadsheetHandle;
+};
+
+/**
+ * The Sheets service as a service account (or any `AccessTokenSource`): no store,
+ * tenant or connection. The spreadsheet must be shared with the account's email.
+ * A 401 forces a fresh token and retries once; a second 401 throws
+ * `ServiceAccountRejectedError`. Handles behave exactly as `createSheets` ones.
+ */
+export function createServiceAccountSheets(
+  source: AccessTokenSource,
+  opts: SheetsOptions = {},
+): ServiceAccountSheetsApi {
+  const handle = handleFactory(opts);
+  const token = async (forceRefresh: boolean): Promise<string> => {
+    try {
+      return await source.getAccessToken({ forceRefresh });
+    } catch (err) {
+      if (err instanceof GoogleLibError) throw err;
+      throw new GoogleApiError(0, "token_request_failed", { cause: err });
+    }
+  };
+  const withToken: WithToken = async (fn) => {
+    try {
+      return await fn(await token(false));
+    } catch (err) {
+      if (!(err instanceof SheetsUnauthorizedSignal)) throw err;
+    }
+    try {
+      return await fn(await token(true));
+    } catch (err) {
+      if (!(err instanceof SheetsUnauthorizedSignal)) throw err;
+      throw new ServiceAccountRejectedError(
+        source.clientEmail,
+        "Google rejected the service account's access token",
+      );
+    }
+  };
+  function open(input: ServiceAccountOpenInput): SpreadsheetHandle {
+    const spreadsheetId = requireId(input, "spreadsheetId");
+    return handle(spreadsheetId, {}, withToken);
+  }
+  return { open };
+}
+
+/** Builds handles for one set of options; the caller supplies how tokens are got. */
+function handleFactory(opts: SheetsOptions) {
   const transport = opts.transport ?? createSheetsApiTransport();
   const retryOpts = {
     ...(opts.sleep ? { sleep: opts.sleep } : {}),
@@ -221,30 +299,21 @@ export function createSheets(
       : {}),
   };
 
-  function open(input: OpenInput): SpreadsheetHandle {
-    const tenantId = requireId(input, "tenantId");
-    const connectionId = requireId(input, "connectionId");
-    const spreadsheetId = requireId(input, "spreadsheetId");
-    const ids = { tenantId, connectionId };
-
+  return function handle(
+    spreadsheetId: string,
+    ids: Ids,
+    withToken: WithToken,
+  ): SpreadsheetHandle {
     /** One token for the whole handle call; each Google call retried on its own. */
     const session = <T>(fn: (send: Send) => Promise<T>): Promise<T> =>
-      withConnectionToken(
-        google,
-        {
-          tenantId,
-          connectionId,
-          service: "sheets",
-          isUnauthorized: (e) => e instanceof SheetsUnauthorizedSignal,
-        },
-        (accessToken) =>
-          fn((op, idempotent) =>
-            withSheetsRetry(() => op({ accessToken, spreadsheetId }), {
-              ...retryOpts,
-              idempotent,
-              ids,
-            }),
-          ),
+      withToken((accessToken) =>
+        fn((op, idempotent) =>
+          withSheetsRetry(() => op({ accessToken, spreadsheetId }), {
+            ...retryOpts,
+            idempotent,
+            ids,
+          }),
+        ),
       );
 
     const tabNotFound = (tab: TabRef): SheetTabNotFoundError =>
@@ -583,7 +652,5 @@ export function createSheets(
         return (res.replies ?? []) as sheets_v4.Schema$Response[];
       },
     };
-  }
-
-  return { open };
+  };
 }

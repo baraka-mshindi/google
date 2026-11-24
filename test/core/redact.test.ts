@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { redact } from "../../src/core/redact.js";
+import { fakePem } from "./fixtures/fake-pem.js";
 
 describe("redact", () => {
   it.each([
@@ -10,6 +11,17 @@ describe("redact", () => {
     ["json field", '{"client_secret":"s3cr3t"}', "s3cr3t"],
     ["json field", '{"id_token":"eyJhbGc.x.y"}', "eyJhbGc.x.y"],
     ["query code", "GET /cb?code=4/0AY0e-g7&state=x", "4/0AY0e-g7"],
+    ["PEM private key", `key: ${fakePem("MIIEvQIBADAN")}`, "MIIEvQIBADAN"],
+    [
+      "PEM key with escaped newlines",
+      JSON.stringify({ private_key: fakePem("MIIEvQIBADAN") }),
+      "MIIEvQIBADAN",
+    ],
+    [
+      "truncated PEM key",
+      fakePem("MIIEvQIBADAN", { label: "RSA PRIVATE KEY", end: false }),
+      "MIIEvQIBADAN",
+    ],
   ])("removes %s", (_label, input, secret) => {
     const out = redact(input);
     expect(out).not.toContain(secret);

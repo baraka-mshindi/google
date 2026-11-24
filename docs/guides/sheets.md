@@ -51,6 +51,45 @@ import { createSheets } from "@mshindi-labs/google/sheets";
 const sheets = createSheets(google);
 ```
 
+### As a service account (no tenant, no connection)
+
+When your app owns the spreadsheet, not a tenant (an internal ops log, say), a Google
+Cloud **service account** is simpler than a connected account: no OAuth client, no
+store, no consent screen. Create a service account and a JSON key, enable the Google
+Sheets API in its project, and **share the spreadsheet with the account's email** as an
+editor. Keep the key in your secret manager, never in the repo.
+
+```ts
+import { createServiceAccountTokenSource } from "@mshindi-labs/google/core";
+import { createServiceAccountSheets } from "@mshindi-labs/google/sheets";
+
+const source = createServiceAccountTokenSource({
+  clientEmail: process.env.SHEETS_CLIENT_EMAIL!, // client_email from the JSON key
+  privateKey: process.env.SHEETS_PRIVATE_KEY!, // private_key; escaped \n is fine
+  services: ["sheets"],
+});
+const sheets = createServiceAccountSheets(source);
+const sheet = sheets.open({ spreadsheetId: "1AbC..." });
+```
+
+The handle is the same `SpreadsheetHandle`: every read, write, append and batch below
+works unchanged. What differs:
+
+- Tokens are minted with the JWT bearer grant, cached until a minute before they
+  expire, and shared by concurrent calls. One source can serve many handles.
+- Bad configuration (an email that is not one, a key that is not PEM) throws
+  `InvalidConfigError` when the source is created.
+- Google refusing the key (deleted, disabled, wrong project, clock far off) or
+  rejecting a fresh token twice throws `service_account_rejected`
+  (`ServiceAccountRejectedError`, with `clientEmail`). Retrying will not help.
+- A token request that fails on the network or with a 5xx throws `GoogleApiError`
+  with reason `token_request_failed`; retrying may help.
+- A spreadsheet that is not shared with the account throws
+  `spreadsheet_access_denied`. Tell the admin to share it with `source.clientEmail`.
+- The private key never appears in an error, a `cause` or a log line.
+
+Domain-wide delegation (acting as a Workspace user) is not supported.
+
 ## 2. Open a handle
 
 ```ts
@@ -394,6 +433,7 @@ All errors extend `GoogleLibError` and carry a stable `code`. Nothing returns
 | `missing_scope`                | `MissingScopeError`              | The connection has no Sheets scope                                                 |
 | `connection_revoked`           | `ConnectionRevokedError`         | Google rejected the token twice; the connection is marked revoked                  |
 | `rate_limited`                 | `RateLimitedError`               | Still rate limited after the retries                                               |
+| `service_account_rejected`     | `ServiceAccountRejectedError`    | Service accounts only: Google refused the key, or rejected a fresh token twice     |
 
 Other 400s surface as `GoogleApiError` with status 400 and Google's reason. One 403 is
 not about sharing: when the Sheets API is not enabled for your OAuth client's Google
@@ -469,6 +509,17 @@ fake.failNext(
 
 `FakeSheets` models how Google parses `RAW` and `USER_ENTERED`, and records purely
 visual requests (widths, formats, merges, filters, sort) without rendering them.
+
+For a service-account integration, pair it with `StaticTokenSource`, which hands out
+fixed tokens with no key and no network. `requests` records each call (with
+`forceRefresh`), and `failNext(err)` makes the next token request fail:
+
+```ts
+import { FakeSheets, StaticTokenSource } from "@mshindi-labs/google/testing";
+
+const source = new StaticTokenSource();
+const sheets = createServiceAccountSheets(source, { transport: fake });
+```
 
 ## 9. Verify against a real sheet
 

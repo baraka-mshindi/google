@@ -19,6 +19,7 @@ const TEST_ONLY = [
   "CaptureTransport",
   "FakeCalendar",
   "FakeSheets",
+  "StaticTokenSource",
   "runStoreContractTests",
 ];
 
@@ -56,6 +57,7 @@ describe("package exports", () => {
         "RateLimitedError",
         "SERVICE_SCOPES",
         "SendOutcomeUnknownError",
+        "ServiceAccountRejectedError",
         "SheetTabNotFoundError",
         "SheetsWriteOutcomeUnknownError",
         "SpreadsheetAccessDeniedError",
@@ -63,6 +65,7 @@ describe("package exports", () => {
         "StaticKeyProvider",
         "UnexpectedAccountError",
         "createGoogle",
+        "createServiceAccountTokenSource",
         "rewrapAll",
         "scopesFor",
         "verifyAll",
@@ -112,6 +115,7 @@ describe("package exports", () => {
     expect(names(mod)).toMatchInlineSnapshot(`
       [
         "a1",
+        "createServiceAccountSheets",
         "createSheets",
         "createSheetsApiTransport",
         "req",
@@ -143,6 +147,7 @@ describe("package exports", () => {
         "FakeSheets",
         "InMemoryStore",
         "LocalKeyProvider",
+        "StaticTokenSource",
         "runStoreContractTests",
         "sheetsHttpError",
       ]

@@ -22,6 +22,14 @@ export type { AadRecord, EncryptedValue } from "./crypto/envelope.js";
 export { rewrapAll, verifyAll } from "./ops.js";
 export type { OpsFailure } from "./ops.js";
 
+export { createServiceAccountTokenSource } from "./service-account.js";
+export type {
+  AccessTokenSource,
+  MintRequest,
+  MintedToken,
+  ServiceAccountOptions,
+} from "./service-account.js";
+
 export { BASE_SCOPES, SERVICE_SCOPES, scopesFor } from "./scopes.js";
 export type { GoogleService } from "./scopes.js";
 

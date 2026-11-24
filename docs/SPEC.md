@@ -51,6 +51,7 @@ Every module must hold these. Breaking one is a bug, not a trade-off.
 | I8  | One `(tenantId, organizerEmail, idempotencyKey)` yields at most one calendar event, and its invitations are sent once.                                                                                                                                                                                                    |
 | I9  | Only calendar events stamped `mshindiGoogle: "v1"` with the same `mshindiTenant` are read or changed.                                                                                                                                                                                                                     |
 | I10 | `append` and `batch` are retried only when Google answered 429 / rate-limit 403, or the failure provably happened before the request reached Google (`ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `ERR_TLS_*`, `CERT_*`); any other ambiguous failure throws `SheetsWriteOutcomeUnknownError` after exactly one Google call. |
+| I11 | A service-account private key is never logged, thrown, emitted or returned, and never reaches a `@googleapis/*` module: only minted access tokens do.                                                                                                                                                                     |
 
 ---
 
@@ -720,6 +721,7 @@ redacted before attaching.
 | `event_cancelled`             | `EventCancelledError`                          |
 | `event_conflict`              | `EventConflictError`                           |
 | `conferencing_unavailable`    | `ConferencingUnavailableError`                 |
+| `service_account_rejected`    | `ServiceAccountRejectedError { clientEmail }`  |
 | `google_api`                  | `GoogleApiError { status, reason }` (fallback) |
 
 ---
