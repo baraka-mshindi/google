@@ -72,7 +72,7 @@ own error classes and `instanceof` can be false for a genuine library error.
 - [Tenant setup](docs/guides/tenant-setup.md): for a tenant admin creating the Google OAuth client.
 - [Host integration](docs/guides/host-integration.md): wiring, routes, error messages, key providers.
 - [Calendar scheduling](docs/guides/calendar-scheduling.md): idempotent booking, reschedule, cancel, free/busy.
-- [Google Sheets](docs/guides/sheets.md): read rows as objects, append without duplicates, atomic batch formatting.
+- [Google Sheets](docs/guides/sheets.md): read rows as objects, append without duplicates, atomic batch formatting, as a connected account or a service account.
 - [Bulk sending](docs/guides/bulk-sending.md): a queue pattern that never double-sends.
 - [Prisma and TypeORM](docs/guides/orm-integration.md): plugging an ORM into the Postgres store.
 - [Postgres row-level security](docs/guides/postgres-rls.md): optional database-enforced tenant isolation.
